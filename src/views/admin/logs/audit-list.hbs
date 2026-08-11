@@ -1,0 +1,56 @@
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">Audit Log</h1>
+</div>
+
+<form method="get" class="mb-4 flex gap-4">
+  <input type="text" name="action" value="{{query.action}}" placeholder="Filter by Action..."
+    class="rounded border border-gray-300 px-3 py-2 text-sm" />
+  
+  <input type="text" name="entityType" value="{{query.entityType}}" placeholder="Filter by Entity Type..."
+    class="rounded border border-gray-300 px-3 py-2 text-sm" />
+    
+  <input type="text" name="actorId" value="{{query.actorId}}" placeholder="Filter by Actor UUID..."
+    class="rounded border border-gray-300 px-3 py-2 text-sm" />
+    
+  <button type="submit" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">Filter</button>
+  <a href="/admin/logs/audit" class="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm">Clear</a>
+</form>
+
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200">
+      <tr>
+        <th class="text-left font-medium text-gray-500 px-4 py-2">Timestamp</th>
+        <th class="text-left font-medium text-gray-500 px-4 py-2">Actor ID</th>
+        <th class="text-left font-medium text-gray-500 px-4 py-2">Action</th>
+        <th class="text-left font-medium text-gray-500 px-4 py-2">Entity Type</th>
+        <th class="text-left font-medium text-gray-500 px-4 py-2">Entity ID</th>
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each records}}
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+          <td class="px-4 py-2 text-gray-600">{{this.createdAt}}</td>
+          <td class="px-4 py-2">{{#if this.actorId}}{{this.actorId}}{{else}}<span class="text-gray-400 italic">System</span>{{/if}}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{this.action}}</td>
+          <td class="px-4 py-2">{{this.entityType}}</td>
+          <td class="px-4 py-2 font-mono text-xs">{{this.entityId}}</td>
+          <td class="px-4 py-2 text-right">
+            <a href="/admin/logs/audit/{{this.id}}" class="text-blue-600 hover:underline">View</a>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td class="px-4 py-6 text-center text-gray-400" colspan="6">No audit records found.</td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+{{#if meta.totalPages}}
+  <div class="flex items-center gap-2 mt-4 text-sm">
+    {{#if (gt meta.page 1)}}<a href="?page={{dec meta.page}}&action={{query.action}}&entityType={{query.entityType}}&actorId={{query.actorId}}" class="px-3 py-1 border rounded">Prev</a>{{/if}}
+    <span class="text-gray-500">Page {{meta.page}} of {{meta.totalPages}} · {{meta.total}} total</span>
+    {{#if (lt meta.page meta.totalPages)}}<a href="?page={{inc meta.page}}&action={{query.action}}&entityType={{query.entityType}}&actorId={{query.actorId}}" class="px-3 py-1 border rounded">Next</a>{{/if}}
+  </div>
+{{/if}}

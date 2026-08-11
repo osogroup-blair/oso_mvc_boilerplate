@@ -1,0 +1,11 @@
+<article class="max-w-2xl mx-auto px-4 py-12">
+  <header class="mb-8">
+    <h1 class="text-4xl font-bold tracking-tight">{{page.title}}</h1>
+  </header>
+
+  {{#each blocks}}
+    {{> (blockPartial this.type) this}}
+  {{else}}
+    <p class="text-gray-400">This page has no content yet.</p>
+  {{/each}}
+</article>

@@ -1,0 +1,31 @@
+<div class="mb-6">
+  <div class="flex items-center gap-4 text-sm mb-4">
+    <a href="/admin/logs/audit" class="text-blue-600 hover:underline">&larr; Back to Audit Log</a>
+  </div>
+  <h1 class="text-2xl font-semibold">Audit Record Detail</h1>
+</div>
+
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="bg-white border border-gray-200 rounded p-4">
+    <h3 class="font-semibold text-gray-700 mb-2">Context</h3>
+    <dl class="space-y-2 text-sm">
+      <div class="flex"><dt class="w-32 text-gray-500">Timestamp</dt><dd>{{record.createdAt}}</dd></div>
+      <div class="flex"><dt class="w-32 text-gray-500">Actor ID</dt><dd class="font-mono text-xs">{{#if record.actorId}}{{record.actorId}}{{else}}System{{/if}}</dd></div>
+      <div class="flex"><dt class="w-32 text-gray-500">Action</dt><dd class="font-mono text-xs bg-gray-100 px-1 rounded">{{record.action}}</dd></div>
+      <div class="flex"><dt class="w-32 text-gray-500">Record ID</dt><dd class="font-mono text-xs text-gray-400">{{record.id}}</dd></div>
+    </dl>
+  </div>
+  
+  <div class="bg-white border border-gray-200 rounded p-4">
+    <h3 class="font-semibold text-gray-700 mb-2">Entity</h3>
+    <dl class="space-y-2 text-sm">
+      <div class="flex"><dt class="w-32 text-gray-500">Entity Type</dt><dd>{{record.entityType}}</dd></div>
+      <div class="flex"><dt class="w-32 text-gray-500">Entity ID</dt><dd class="font-mono text-xs">{{record.entityId}}</dd></div>
+    </dl>
+  </div>
+</div>
+
+<h3 class="text-lg font-semibold mb-4">Changes (JSON)</h3>
+<div class="bg-gray-900 rounded p-4 overflow-x-auto text-sm text-gray-100 font-mono">
+  <pre>{{changesJson}}</pre>
+</div>

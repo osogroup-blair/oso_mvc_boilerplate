@@ -1,0 +1,46 @@
+<div class="flex items-center justify-between mb-6">
+  <h1 class="text-2xl font-semibold">{{schema.labelPlural}}</h1>
+  <a href="/admin/{{schema.key}}/new" class="bg-blue-600 text-white text-sm rounded px-4 py-2 hover:bg-blue-700">+ New {{schema.label}}</a>
+</div>
+
+<form method="get" class="mb-4">
+  <input type="text" name="q" value="{{query.q}}" placeholder="Search…"
+    class="w-full max-w-sm rounded border border-gray-300 px-3 py-2 text-sm" />
+</form>
+
+<div class="bg-white rounded-lg border border-gray-200 overflow-hidden">
+  <table class="w-full text-sm">
+    <thead class="bg-gray-50 border-b border-gray-200">
+      <tr>
+        {{#each columns}}
+          <th class="text-left font-medium text-gray-500 px-4 py-2">{{#if this.label}}{{this.label}}{{else}}{{humanize this.key}}{{/if}}</th>
+        {{/each}}
+        <th class="px-4 py-2"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#each records}}
+        <tr class="border-b border-gray-100 hover:bg-gray-50">
+          {{#each ../columns}}
+            <td class="px-4 py-2">{{cell this ../this}}</td>
+          {{/each}}
+          <td class="px-4 py-2 text-right">
+            <a href="/admin/{{../schema.key}}/{{this.id}}" class="{{#if this._readonly}}text-gray-500{{else}}text-blue-600{{/if}}">
+              {{#if this._readonly}}View{{else}}Edit{{/if}}
+            </a>
+          </td>
+        </tr>
+      {{else}}
+        <tr><td class="px-4 py-6 text-center text-gray-400" colspan="99">No records yet.</td></tr>
+      {{/each}}
+    </tbody>
+  </table>
+</div>
+
+{{#if meta.totalPages}}
+  <div class="flex items-center gap-2 mt-4 text-sm">
+    {{#if (gt meta.page 1)}}<a href="?page={{dec meta.page}}&q={{query.q}}" class="px-3 py-1 border rounded">Prev</a>{{/if}}
+    <span class="text-gray-500">Page {{meta.page}} of {{meta.totalPages}} · {{meta.total}} total</span>
+    {{#if (lt meta.page meta.totalPages)}}<a href="?page={{inc meta.page}}&q={{query.q}}" class="px-3 py-1 border rounded">Next</a>{{/if}}
+  </div>
+{{/if}}

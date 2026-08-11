@@ -1,0 +1,154 @@
+<div class="mb-6">
+  <h1 class="text-2xl font-semibold">Diagnostics &amp; Live Logs</h1>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+  <div class="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
+    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Database Status</h3>
+    <div class="flex items-center gap-3">
+      {{#if (eq health.db.status "ok")}}
+        <span class="inline-flex items-center justify-center w-8 h-8 bg-green-100 text-green-700 rounded-full">✓</span>
+        <div>
+          <div class="font-medium text-gray-900">Connected</div>
+          <div class="text-sm text-gray-500">{{health.db.latencyMs}}ms latency</div>
+        </div>
+      {{else}}
+        <span class="inline-flex items-center justify-center w-8 h-8 bg-red-100 text-red-700 rounded-full">✕</span>
+        <div>
+          <div class="font-medium text-gray-900">Disconnected</div>
+          <div class="text-sm text-gray-500">Error querying DB</div>
+        </div>
+      {{/if}}
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
+    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Process Uptime</h3>
+    <div class="flex items-center gap-3">
+      <span class="inline-flex items-center justify-center w-8 h-8 bg-blue-100 text-blue-700 rounded-full">⏱</span>
+      <div>
+        <div class="font-medium text-gray-900" id="uptime-display">{{health.uptime}}s</div>
+        <div class="text-sm text-gray-500">Node {{health.nodeVersion}} · {{health.env}}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bg-white rounded-lg border border-gray-200 p-5 shadow-sm">
+    <h3 class="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-2">Memory Usage</h3>
+    <div class="flex flex-col gap-1">
+      <div class="flex justify-between text-sm">
+        <span class="text-gray-500">RSS</span>
+        <span class="font-medium text-gray-900" id="mem-rss">{{health.memory.rss}}</span>
+      </div>
+      <div class="flex justify-between text-sm">
+        <span class="text-gray-500">Heap Used</span>
+        <span class="font-medium text-gray-900" id="mem-heap">{{health.memory.heapUsed}} / {{health.memory.heapTotal}}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="mb-4 flex items-center justify-between">
+  <h3 class="text-lg font-semibold">Live Request Tail</h3>
+  <div class="flex items-center gap-2 text-sm">
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="checkbox" id="log-filter-info" checked /> INFO
+    </label>
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="checkbox" id="log-filter-warn" checked /> WARN
+    </label>
+    <label class="flex items-center gap-1 cursor-pointer">
+      <input type="checkbox" id="log-filter-error" checked /> ERROR
+    </label>
+    <button id="clear-logs" class="text-gray-500 hover:text-gray-800 ml-4">Clear</button>
+  </div>
+</div>
+
+<div class="bg-gray-900 rounded-lg p-4 h-96 overflow-y-auto shadow-inner relative">
+  <pre id="log-container" class="text-xs font-mono text-gray-300 whitespace-pre-wrap break-all"></pre>
+</div>
+
+<script>
+  function formatBytes(bytes) {
+    return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+  }
+
+  function formatUptime(seconds) {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h}h ${m}m ${s}s`;
+  }
+
+  // Format initial values
+  document.getElementById('mem-rss').textContent = formatBytes({{health.memory.rss}});
+  document.getElementById('mem-heap').textContent = `${formatBytes({{health.memory.heapUsed}})} / ${formatBytes({{health.memory.heapTotal}})}`;
+  document.getElementById('uptime-display').textContent = formatUptime({{health.uptime}});
+
+  const container = document.getElementById('log-container');
+  const filters = {
+    info: document.getElementById('log-filter-info'),
+    warn: document.getElementById('log-filter-warn'),
+    error: document.getElementById('log-filter-error')
+  };
+
+  document.getElementById('clear-logs').addEventListener('click', () => {
+    container.innerHTML = '';
+  });
+
+  const evtSource = new EventSource('/admin/logs/stream');
+  
+  evtSource.onmessage = function(event) {
+    try {
+      const log = JSON.parse(event.data);
+      let levelLabel = "INFO";
+      let colorClass = "text-blue-400";
+      
+      if (log.level >= 50) { levelLabel = "ERROR"; colorClass = "text-red-400"; }
+      else if (log.level >= 40) { levelLabel = "WARN"; colorClass = "text-yellow-400"; }
+
+      // Apply filters
+      if (levelLabel === "INFO" && !filters.info.checked) return;
+      if (levelLabel === "WARN" && !filters.warn.checked) return;
+      if (levelLabel === "ERROR" && !filters.error.checked) return;
+
+      const time = new Date(log.time).toLocaleTimeString();
+      const msg = log.msg || "";
+      
+      let reqInfo = "";
+      if (log.req) {
+        reqInfo = `${log.req.method} ${log.req.url}`;
+      }
+      if (log.res) {
+        reqInfo += ` ${log.res.statusCode}`;
+      }
+      if (log.responseTime) {
+        reqInfo += ` ${log.responseTime}ms`;
+      }
+      
+      const line = document.createElement('div');
+      line.className = 'mb-1 hover:bg-gray-800 px-1 rounded';
+      line.innerHTML = `<span class="text-gray-500">[${time}]</span> <span class="${colorClass} font-bold w-12 inline-block">${levelLabel}</span> ${reqInfo} ${msg}`;
+      
+      // Auto-scroll logic
+      const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+      container.appendChild(line);
+      
+      // Keep only last 500 lines in DOM to prevent lag
+      if (container.children.length > 500) {
+        container.removeChild(container.firstChild);
+      }
+      
+      if (isScrolledToBottom) {
+        container.scrollTop = container.scrollHeight;
+      }
+    } catch (e) {
+      // Not JSON, or other format from non-pino stream, just append raw
+      const line = document.createElement('div');
+      line.className = 'mb-1 text-gray-400';
+      line.textContent = event.data;
+      container.appendChild(line);
+      container.scrollTop = container.scrollHeight;
+    }
+  };
+</script>

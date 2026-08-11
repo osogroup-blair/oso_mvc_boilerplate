@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gray-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Under Maintenance · {{siteName}}</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    :root {
+      --accent: {{accentColor}};
+    }
+  </style>
+</head>
+<body class="h-full flex items-center justify-center px-6 py-24 sm:py-32 lg:px-8">
+  <div class="text-center max-w-xl">
+    <div class="inline-flex p-3 bg-indigo-50 rounded-full text-indigo-600 mb-6" style="background-color: color-mix(in srgb, var(--accent) 10%, white); color: var(--accent);">
+      <svg class="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.75">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17L17.25 21A2.67 2.67 0 1113.5 17.25l-5.83-5.83m0 0a2.67 2.67 0 113.75-3.75l5.83 5.83m-9.58-2.08l-5.82 5.82a2.67 2.67 0 11-3.75-3.75l5.82-5.82m0 0l5.83-5.83a2.67 2.67 0 113.75 3.75L11.42 9.34z" />
+      </svg>
+    </div>
+    
+    <h1 class="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">Under Maintenance</h1>
+    
+    <p class="mt-6 text-base leading-7 text-gray-600">
+      {{maintenanceMessage}}
+    </p>
+    
+    <div class="mt-10 flex items-center justify-center gap-x-6">
+      <a href="mailto:{{contactEmail}}" class="text-sm font-semibold text-gray-950 hover:text-indigo-600 transition" style="color: var(--accent);">
+        Contact support &rarr;
+      </a>
+    </div>
+  </div>
+</body>
+</html>

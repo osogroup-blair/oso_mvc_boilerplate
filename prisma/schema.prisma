@@ -1,0 +1,403 @@
+// Prisma schema. Add new models here, then run `npm run db:migrate`.
+// See skills/SKILL-model.md for the model-creation pattern.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Domain models ─────────────────────────────────────
+
+model User {
+  id       String  @id @default(uuid())
+  email    String  @unique
+  name     String
+  roleId   String
+  role     Role    @relation(fields: [roleId], references: [id])
+  bio      String?
+  isActive Boolean @default(true)
+  passwordHash String?
+  emailVerifiedAt DateTime?
+
+  // Nested "object" field in the admin UI is stored as JSON.
+  address Json?
+
+  // Array-of-primitives ("tags") stored as string list.
+  tags String[] @default([])
+
+  // One-to-many relation → rendered as inline-editable table in admin.
+  posts    Post[]
+  sessions Session[]
+  passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
+
+  // Demo: Project/Task seed back-relation.
+  projects Project[]
+
+  // Multi-tenancy: organizations this user belongs to.
+  orgMembers OrgMember[]
+
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime? // soft delete
+
+  @@index([deletedAt])
+}
+
+model Post {
+  id        String  @id @default(uuid())
+  title     String
+  body      String
+  published Boolean @default(false)
+
+  // Relation field → rendered as searchable dropdown in admin.
+  authorId String
+  author   User   @relation(fields: [authorId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([authorId])
+  @@index([deletedAt])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model EmailVerificationToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  actorId    String? // who performed the action (null = system)
+  action     String // e.g. "user.create"
+  entityType String // e.g. "User"
+  entityId   String?
+  changes    Json? // { before, after }
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@index([actorId])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  // Structured as "resource:action" pairs, e.g. "page:read", "user:update".
+  permissions String[] @default([])
+  users       User[]
+
+  // Back-relations for page/route access control.
+  pageRoles  PageRole[]
+  routeRoles RouteRole[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([deletedAt])
+}
+
+// ─── CMS ───────────────────────────────────────────────
+
+model Page {
+  id     String     @id @default(uuid())
+  slug   String     @unique
+  title  String
+  status PageStatus @default(DRAFT)
+
+  // Ordered content blocks. The public view renders each block by its `type`.
+  // This is the canonical "view rendered off a JSON payload" example.
+  blocks Json @default("[]")
+
+  // SEO metadata — a nested object in the admin UI.
+  seo Json?
+
+  // Access control: M2M via explicit join table (replaces String[] allowedRoles).
+  allowedRoles PageRole[]
+
+  isHardcoded Boolean @default(false)
+  filePath    String?
+
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([slug])
+  @@index([deletedAt])
+}
+
+// Explicit join table linking pages to the roles that may access them.
+model PageRole {
+  id     String @id @default(uuid())
+  pageId String
+  page   Page   @relation(fields: [pageId], references: [id])
+  roleId String
+  role   Role   @relation(fields: [roleId], references: [id])
+
+  @@unique([pageId, roleId])
+  @@index([pageId])
+  @@index([roleId])
+}
+
+enum PageStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+model NavigationItem {
+  id    String @id @default(uuid())
+  label String
+  url   String
+  order Int    @default(0)
+
+  parentId String?
+  parent   NavigationItem?  @relation("NavigationNesting", fields: [parentId], references: [id])
+  children NavigationItem[] @relation("NavigationNesting")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([parentId])
+  @@index([deletedAt])
+}
+
+enum RouteTargetType {
+  PAGE
+  REDIRECT
+  APP
+}
+
+model Route {
+  id           String          @id @default(uuid())
+  pattern      String          @unique
+  targetType   RouteTargetType
+  targetValue  String
+  redirectCode Int             @default(302)
+  isActive     Boolean         @default(true)
+  // Access control: M2M via explicit join table (replaces String[] allowedRoles).
+  allowedRoles RouteRole[]
+  priority     Int             @default(0)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([pattern])
+  @@index([deletedAt])
+}
+
+// Explicit join table linking routes to the roles that may access them.
+model RouteRole {
+  id      String @id @default(uuid())
+  routeId String
+  route   Route  @relation(fields: [routeId], references: [id])
+  roleId  String
+  role    Role   @relation(fields: [roleId], references: [id])
+
+  @@unique([routeId, roleId])
+  @@index([routeId])
+  @@index([roleId])
+}
+
+// ─── Demo: Project / Task / Tag Manager ────────────────
+
+// 1-to-many parent. Demonstrates: enum field, owner FK relation, soft delete.
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+
+  // Relation field → rendered as searchable dropdown in admin.
+  ownerId String
+  owner   User   @relation(fields: [ownerId], references: [id])
+
+  // 1-to-many child collection.
+  tasks Task[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([ownerId])
+  @@index([deletedAt])
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  ARCHIVED
+}
+
+// 1-to-many child. Demonstrates: two enums, Json metadata sub-object, M2M via join table.
+model Task {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(MEDIUM)
+  dueDate     DateTime?
+
+  // Nested "object" field in the admin UI is stored as JSON.
+  meta Json? // e.g. { estimatedHours, storyPoints }
+
+  // Relation field → rendered as searchable dropdown in admin.
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  // Many-to-many via explicit join table.
+  taskTags TaskTag[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([projectId])
+  @@index([deletedAt])
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  IN_REVIEW
+  DONE
+  CANCELLED
+}
+
+enum TaskPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Tag vocabulary. Demonstrates: simple lookup model, M2M source side.
+model Tag {
+  id    String @id @default(uuid())
+  name  String @unique
+  color String @default("#6366f1") // hex for UI badge
+
+  taskTags TaskTag[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([deletedAt])
+}
+
+// Explicit join table. Demonstrates: composite unique, both FK sides, M2M pattern.
+model TaskTag {
+  id     String @id @default(uuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id])
+  tagId  String
+  tag    Tag    @relation(fields: [tagId], references: [id])
+
+  @@unique([taskId, tagId])
+  @@index([taskId])
+  @@index([tagId])
+}
+
+// Global site settings. Demonstrates: key-value store for application config.
+model SiteSetting {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Asset {
+  id        String    @id @default(uuid())
+  filename  String
+  mimeType  String
+  size      Int
+  key       String    @unique
+  url       String
+  provider  String
+  userId    String?
+  createdAt DateTime  @default(now())
+  deletedAt DateTime?
+
+  @@index([deletedAt])
+}
+
+// ─── Multi-Tenancy ─────────────────────────────────────────────────
+
+model Organization {
+  id        String      @id @default(uuid())
+  name      String
+  slug      String      @unique
+  logoUrl   String?
+  members   OrgMember[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([deletedAt])
+}
+
+model OrgMember {
+  id       String       @id @default(uuid())
+  orgId    String
+  org      Organization @relation(fields: [orgId], references: [id])
+  userId   String
+  user     User         @relation(fields: [userId], references: [id])
+  role     OrgRole      @default(MEMBER)
+  joinedAt DateTime     @default(now())
+  deletedAt DateTime?
+
+  @@unique([orgId, userId])
+  @@index([orgId])
+  @@index([userId])
+}
+
+enum OrgRole {
+  OWNER
+  ADMIN
+  MEMBER
+}
+

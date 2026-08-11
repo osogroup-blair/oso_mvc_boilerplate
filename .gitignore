@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env
+*.log
+public/css/app.css
+coverage/
+.DS_Store

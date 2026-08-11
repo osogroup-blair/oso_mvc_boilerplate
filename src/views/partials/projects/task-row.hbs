@@ -1,0 +1,48 @@
+{{!-- Task row partial. Receives a task object with: title, status, priority, dueDate, taskTags. --}}
+<tr class="hover:bg-gray-50 transition-colors">
+  <td class="px-4 py-3 text-sm font-medium text-gray-900">{{title}}</td>
+
+  {{!-- Status pill --}}
+  <td class="px-4 py-3 text-sm">
+    {{#if (eq status "TODO")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-700">Todo</span>
+    {{else if (eq status "IN_PROGRESS")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-700">In Progress</span>
+    {{else if (eq status "IN_REVIEW")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-700">In Review</span>
+    {{else if (eq status "DONE")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-700">Done</span>
+    {{else if (eq status "CANCELLED")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-600">Cancelled</span>
+    {{/if}}
+  </td>
+
+  {{!-- Priority pill --}}
+  <td class="px-4 py-3 text-sm">
+    {{#if (eq priority "CRITICAL")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-700">Critical</span>
+    {{else if (eq priority "HIGH")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-700">High</span>
+    {{else if (eq priority "MEDIUM")}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-yellow-100 text-yellow-700">Medium</span>
+    {{else}}
+      <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600">Low</span>
+    {{/if}}
+  </td>
+
+  {{!-- Tags from M2M join --}}
+  <td class="px-4 py-3 text-sm">
+    <div class="flex flex-wrap gap-1">
+      {{#each taskTags}}
+        <span class="inline-block px-1.5 py-0.5 rounded text-xs font-medium text-white" style="background-color: {{this.tag.color}}">
+          {{this.tag.name}}
+        </span>
+      {{/each}}
+    </div>
+  </td>
+
+  {{!-- Due date --}}
+  <td class="px-4 py-3 text-sm text-gray-500">
+    {{#if dueDate}}{{dueDate}}{{else}}&mdash;{{/if}}
+  </td>
+</tr>

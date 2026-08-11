@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{#if siteName}}{{siteName}}{{else}}Boilerplate{{/if}}{{#if title}} · {{title}}{{/if}}</title>
+  {{#if seo.description}}
+    <meta name="description" content="{{seo.description}}" />
+  {{else if siteDescription}}
+    <meta name="description" content="{{siteDescription}}" />
+  {{/if}}
+  {{#if seo.ogImage}}<meta property="og:image" content="{{seo.ogImage}}" />{{/if}}
+  <link rel="stylesheet" href="/css/app.css" />
+  <style>
+    :root {
+      --accent: {{#if accentColor}}{{accentColor}}{{else}}#6366f1{{/if}};
+    }
+    .theme-accent-text { color: var(--accent) !important; }
+    .theme-accent-border:hover { border-color: var(--accent) !important; }
+    .theme-accent-hover:hover { color: var(--accent) !important; }
+  </style>
+  <script>
+    window.APP_USER = {
+      isLoggedIn: {{#if user}}true{{else}}false{{/if}},
+      role: "{{user.role}}",
+      permissions: {{{json permissions}}}
+    };
+  </script>
+</head>
+<body class="bg-white text-gray-900 flex flex-col min-h-screen">
+  <header class="bg-white shadow-sm sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between h-16">
+        <div class="flex">
+          <div class="flex-shrink-0 flex items-center">
+            <a href="/" class="text-xl font-bold theme-accent-text">
+              {{#if logoUrl}}
+                <img src="{{logoUrl}}" alt="{{siteName}}" class="h-8 w-auto" />
+              {{else}}
+                {{siteName}}
+              {{/if}}
+            </a>
+          </div>
+          {{#if navigation}}
+          <nav class="hidden sm:ml-6 sm:flex sm:space-x-8">
+            {{#each navigation}}
+            <div class="relative group flex items-center">
+              <a href="{{this.url}}" class="text-gray-900 inline-flex items-center px-1 pt-1 border-b-2 border-transparent theme-accent-border theme-accent-hover text-sm font-medium">
+                {{this.label}}
+              </a>
+              {{#if this.children.length}}
+              <div class="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 group-hover:opacity-100 transition-opacity duration-200 invisible group-hover:visible top-full">
+                <div class="py-1" role="menu" aria-orientation="vertical">
+                  {{#each this.children}}
+                  <a href="{{this.url}}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100" role="menuitem">{{this.label}}</a>
+                  {{/each}}
+                </div>
+              </div>
+              {{/if}}
+            </div>
+            {{/each}}
+          </nav>
+          {{/if}}
+        </div>
+
+        <div class="flex items-center gap-4">
+          {{#if user}}
+            <span class="text-xs text-gray-500">
+              Logged in as <strong class="text-gray-700">{{user.name}}</strong> ({{user.role}})
+            </span>
+            <form method="post" action="/admin/logout" class="inline">
+              <button type="submit" class="text-xs text-red-600 hover:underline">Logout</button>
+            </form>
+          {{else}}
+            <a href="/admin/login" class="text-xs theme-accent-text hover:underline font-medium">Login</a>
+          {{/if}}
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow">
+    {{{body}}}
+  </main>
+
+  <footer class="bg-gray-50 border-t border-gray-200 py-8">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-gray-500 text-sm">
+      {{#if footerText}}
+        {{footerText}}
+      {{else}}
+        &copy; MVC Boilerplate. All rights reserved.
+      {{/if}}
+    </div>
+  </footer>
+</body>
+</html>

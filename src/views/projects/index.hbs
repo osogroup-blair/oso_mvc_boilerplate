@@ -1,0 +1,64 @@
+{{!-- projects/index.hbs — Project list page.
+     Demonstrates: controller builds array payload → view walks it with #each.
+     Controller pre-fetches owner name + task count; view never queries. --}}
+<div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+
+  {{!-- Page header --}}
+  <div class="flex items-center justify-between mb-8">
+    <div>
+      <h1 class="text-3xl font-bold tracking-tight text-gray-900">Projects</h1>
+      <p class="mt-1 text-sm text-gray-500">All projects in the system. Seed data includes three examples.</p>
+    </div>
+    {{#if user}}
+      <a href="/projects/new"
+         class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+        + New project
+      </a>
+    {{else}}
+      <a href="/admin/login"
+         class="text-sm text-indigo-600 hover:underline">
+        Log in to create
+      </a>
+    {{/if}}
+  </div>
+
+  {{!-- Project cards --}}
+  {{#if projects.length}}
+    <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+      {{#each projects}}
+        <a href="/projects/{{this.id}}"
+           class="group block bg-white rounded-xl border border-gray-200 shadow-sm hover:shadow-md hover:border-indigo-300 transition-all duration-200 overflow-hidden">
+          <div class="p-5">
+            {{!-- Status badge — reusable partial --}}
+            <div class="mb-3">
+              {{> projects/status-badge status=this.status}}
+            </div>
+
+            <h2 class="text-lg font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors truncate">
+              {{this.name}}
+            </h2>
+
+            {{#if this.description}}
+              <p class="mt-1 text-sm text-gray-500 line-clamp-2">{{this.description}}</p>
+            {{/if}}
+
+            <div class="mt-4 flex items-center justify-between text-xs text-gray-400">
+              <span>
+                {{this._count.tasks}} task{{#if (eq this._count.tasks 1)}}{{else}}s{{/if}}
+              </span>
+              <span>{{this.owner.name}}</span>
+            </div>
+          </div>
+        </a>
+      {{/each}}
+    </div>
+  {{else}}
+    {{!-- Empty state --}}
+    <div class="text-center py-20 border-2 border-dashed border-gray-200 rounded-xl">
+      <p class="text-gray-400 text-sm">No projects yet.</p>
+      {{#if user}}
+        <a href="/projects/new" class="mt-2 inline-block text-sm text-indigo-600 hover:underline">Create the first one</a>
+      {{/if}}
+    </div>
+  {{/if}}
+</div>
