@@ -6,6 +6,7 @@ export const SETTING_KEYS = {
   // Site Identity
   SITE_NAME: { key: "SITE_NAME", group: "Identity", type: "text", label: "Site Name", help: "The name of this website. Used in page titles.", defaultValue: "My App" },
   SITE_DESCRIPTION: { key: "SITE_DESCRIPTION", group: "Identity", type: "textarea", label: "Site Description", help: "Default meta description for SEO.", defaultValue: "A schema-driven MVC boilerplate application." },
+  PUBLIC_APP_URL: { key: "PUBLIC_APP_URL", group: "Identity", type: "url", label: "Public App URL", help: "Absolute base URL used when generating auth and workflow task email links.", defaultValue: "http://localhost:3000" },
   HOME_PAGE_SLUG: { key: "HOME_PAGE_SLUG", group: "Identity", type: "select", label: "Home Page", help: "Select the published CMS page to serve as the homepage.", defaultValue: "welcome" },
 
   // Content
@@ -39,6 +40,9 @@ export const SETTING_KEYS = {
   SESSION_TTL_HOURS: { key: "SESSION_TTL_HOURS", group: "Security", type: "number", label: "Session Expiry (Hours)", help: "Default login session duration in hours.", defaultValue: "24" },
   MAINTENANCE_MODE: { key: "MAINTENANCE_MODE", group: "Security", type: "boolean", label: "Maintenance Mode", help: "Take the visitor-facing site offline.", defaultValue: "false" },
   MAINTENANCE_MESSAGE: { key: "MAINTENANCE_MESSAGE", group: "Security", type: "textarea", label: "Maintenance Message", help: "Message to display on the maintenance screen.", defaultValue: "We are currently performing scheduled maintenance. Please check back shortly." },
+
+  // Workflow Operations
+  ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES: { key: "ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES", group: "Workflow Operations", type: "number", label: "Activity Idempotency Stale Claim Minutes", help: "Minutes before a RUNNING activity idempotency claim can be recovered by a retry after a worker crash.", defaultValue: "15" },
 
   // UI/Appearance
   FOOTER_TEXT: { key: "FOOTER_TEXT", group: "UI & Appearance", type: "text", label: "Footer Copyright Text", help: "Footer disclaimer / copyright notice.", defaultValue: "© 2026 My App. All rights reserved." },

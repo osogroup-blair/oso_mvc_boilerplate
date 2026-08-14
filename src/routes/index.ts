@@ -8,6 +8,8 @@ import { pageRoutes } from "./page.routes.js";
 import { projectRoutes } from "./project.routes.js";
 import { taskRoutes, taskTagRoutes } from "./task.routes.js";
 import { authRoutes } from "./auth.routes.js";
+import { workflowRoutes } from "./workflow.routes.js";
+import { workflowTaskRoutes, workflowTaskTokenRoutes } from "./workflowTask.routes.js";
 
 export const router = Router();
 
@@ -17,9 +19,10 @@ router.use("/api/users", userRoutes);
 router.use("/admin", adminRoutes);
 router.use("/pages", pageRoutes);
 router.use("/projects", projectRoutes);
+router.use("/workflows", workflowRoutes);
+router.use("/workflow-tasks", workflowTaskRoutes);
+router.use("/workflow-task-tokens", workflowTaskTokenRoutes);
 router.use("/api/projects/:projectId/tasks", taskRoutes);
 router.use("/api/tasks", taskTagRoutes);
 
 router.get("/", optionalAuth, pageController.renderHome.bind(pageController));
-
-

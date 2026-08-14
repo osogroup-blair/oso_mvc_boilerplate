@@ -26,6 +26,9 @@ Guidance for AI coding agents working in this repository. (Human devs: see
 - **Admin sub-controllers**: if a new admin feature is too specialised for
   generic CRUD, create a file in `controllers/admin/` and a matching route file
   in `routes/admin/`. Do not bloat `admin.controller.ts`.
+- **Workflow integration secrets never enter Workflows or views**: credentials
+  are write-only in admin, encrypted at rest, resolved only by Activities
+  through `integration-resolver.service.ts`, and redacted from audit logs.
 
 ## Task → skill
 | Task | Read |
@@ -41,6 +44,11 @@ Guidance for AI coding agents working in this repository. (Human devs: see
 | Add an admin CRUD page | `skills/SKILL-admin.md` |
 | Add a specialised admin section | `skills/SKILL-admin.md` + create `controllers/admin/` + `routes/admin/` |
 | Build a server-rendered view or CMS block | `skills/SKILL-views.md` |
+| Add/change Temporal client, Worker, Workflow, or Activity code | `skills/SKILL-temporal.md` |
+| Add/change workflow human tasks, action signals, token task links, or workflow receipts | `skills/SKILL-temporal.md` + `skills/SKILL-validation-errors.md` |
+| Add/change workflow integration providers, connections, bindings, or Activity idempotency | `skills/SKILL-temporal.md` + `skills/SKILL-cross-cutting.md` |
+| Add/change workflow schedules, Temporal operations dashboard, worker diagnostics, or projection reconciliation | `skills/SKILL-temporal.md` + `skills/SKILL-admin.md` |
+| Migrate a standalone/showcase workflow onto Temporal | `skills/SKILL-temporal.md` + `skills/SKILL-service.md` + `skills/SKILL-validation-errors.md` |
 | Write or run tests | `skills/SKILL-testing.md` |
 
 ## Key systems to be aware of
@@ -56,6 +64,106 @@ Global config lives in the `SiteSetting` table, not in `.env`. Use
 `settingService.get(key)` to read and `settingService.set(key, value, actorId)`
 to write. All valid keys and their metadata are declared in the `SETTING_KEYS`
 const in `setting.service.ts`. Adding a new setting = add an entry there.
+
+### Temporal Runtime
+Temporal runs as a separate Worker process from `src/temporal/worker.ts`.
+`server.ts` starts the web application and BullMQ email worker only; it must not
+start or import the Temporal Worker. Web code talks to Temporal through
+`src/lib/temporalClient.ts`. Workflow modules must stay deterministic and must
+not import services, models, Prisma, config, controllers, routes, logger, or
+Node I/O. Activities may call application services and integration adapters, but
+must not import Prisma or models directly.
+
+### Workflow Catalog and Executions
+`server.ts` calls `syncWorkflowDefinitions()` on startup. Workflow definitions
+are code-registered in `src/temporal/workflow-registry.ts` and synchronized to
+`WorkflowDefinition` rows. Admins configure safe metadata, enablement, and role
+capabilities at `/admin/workflows`; users see permitted enabled definitions at
+`/workflows`. Start/detail/list/refresh/cancel execution screens are backed by
+`WorkflowExecution` projection rows and `workflow-execution.service.ts`, which
+calls Temporal only through `src/lib/temporalClient.ts`. Do not store executable
+workflow code or provider secrets in the catalog/execution tables.
+
+### Workflow Human Tasks
+Workflows gather user input through durable `WorkflowHumanTask` rows created by
+Activities via `workflow-human-task.service.ts`. Authenticated task views live
+under `/workflow-tasks`; public email-token task views live under
+`/workflow-task-tokens`. Store only token hashes, protect browser POSTs with the
+CSRF middleware, signal workflows through `src/lib/temporalClient.ts`, and
+record idempotent `WorkflowActionReceipt` rows for every action.
+
+Workflow task email links use the `PUBLIC_APP_URL` site setting. Do not add an
+environment variable for app-facing URL behavior.
+
+### Migrated Showcase Workflows
+Phase 6A migrated `showcase.customerOnboarding` and
+`showcase.humanApproval`; Phase 6B migrated
+`showcase.orderFulfillmentSaga` and `showcase.dataSynchronization`; Phase 6C
+migrated `showcase.employeeLifecycle` and `showcase.clientEngagement`; Phase 6D
+migrated `showcase.aiDocumentProcessing` and `showcase.aiSupportAgent`; Phase
+6E migrated `showcase.complianceReview` and
+`showcase.underwritingCapstone`. They are normal code-registered workflows
+using the generic `/workflows` start/detail/refresh screens, generic
+`/workflow-tasks`/token task forms when human input is needed, real Temporal
+child workflows where the orchestration needs parent/child visibility, Temporal
+schedules where configured, and admin-managed integration bindings.
+Do not add workflow-specific controllers, routes, or views for future migrated
+workflow waves unless the generic renderer cannot express a truly
+domain-specific interaction.
+
+Action-specific browser input must be declared in the workflow registry and is
+delivered to deterministic Workflow code through `WorkflowHumanActionInput.payload`.
+Integration side effects belong in Activities/services via
+`integration-resolver.service.ts` and `activity-idempotency.service.ts`, never
+inside Workflow code.
+
+Saga compensation and fan-out/fan-in state belongs in deterministic Workflow
+state and Temporal history. Do not mirror retries, timers, or compensation
+stacks into Postgres as a second workflow engine; Postgres remains catalog,
+idempotency, task, audit, and projection storage.
+
+Long waits, post-start/post-launch timers, cancellation cleanup, and child
+workflow fan-out belong in Temporal Workflow code. Browser input for those waits
+must surface through registered human-task actions, not bespoke polling routes
+or ad-hoc tables.
+
+Compliance evidence collection, reminder/escalation waits, missing-information
+loops, analyst decisions, and cancellation cleanup also belong in Temporal
+Workflow code. Surface required user input as registered action forms and
+`WorkflowHumanTask` rows; do not create workflow-specific case tables unless
+the generic projection/task model cannot support the product requirement.
+
+AI/file workflow inputs must use safe references and summaries. Do not put raw
+documents, full customer transcripts, prompts, model credentials, or unredacted
+tool payloads into Workflow input, signal payloads, query state, summaries, or
+audit/browser payloads. Activities/services own blob retrieval, provider calls,
+prompt construction, tool execution, and idempotent audit-safe result storage.
+
+### Workflow Integrations
+Workflow integration requirements are declared in
+`src/temporal/workflow-registry.ts` and synced to the database. Admins manage
+organization connections and requirement bindings at `/admin/integrations`.
+Provider definitions live in `src/integrations/provider-registry.ts`; they
+declare credential/config schemas, test behavior, redaction, and Activity
+adapters.
+
+Credentials are infrastructure secrets. They are encrypted by
+`credential-encryption.service.ts` using config from `src/config/index.ts`,
+stored only as ciphertext/IV/auth tag/fingerprint, and never returned to views.
+Activities resolve connections through `integration-resolver.service.ts`; do
+not import that resolver from Workflow code. External side-effect Activities
+should use `activity-idempotency.service.ts` with stable idempotency keys.
+
+### Workflow Operations and Schedules
+Admins manage Temporal diagnostics and schedules at `/admin/workflow-operations`.
+`WorkflowSchedule` is an app-owned projection of a Temporal Schedule, not a
+second scheduler. Create/pause/unpause/trigger/delete actions go through
+`workflow-schedule.service.ts`, which validates workflow registry input,
+required integration bindings, organization context, and audits all mutations.
+`workflow-operations.service.ts` reports Temporal connectivity, configured
+task-queue pollers, schedule counts, and stale execution projection
+reconciliation. Do not fabricate scheduled execution rows; Temporal remains the
+authority for timers and schedule action history.
 
 ### Navigation
 Navigation items are stored in the `NavigationItem` table (hierarchical,
@@ -103,6 +211,10 @@ force-logout a user. Active sessions are visible at `/admin/sessions`.
 - [ ] Input validated with Zod; errors are `AppError`; responses use the envelope.
 - [ ] Mutations are audited; deletes are soft (except `Session` — hard-delete).
 - [ ] New site config keys are registered in `SETTING_KEYS`, not added to `.env`.
+- [ ] New infrastructure env keys are added to `src/config/index.ts` and `.env.example`.
+- [ ] Workflow integration credentials are write-only, encrypted, Activity-resolved, and audit-redacted.
+- [ ] Workflow schedules go through Temporal Schedule APIs and local projections are audited/soft-deleted.
+- [ ] Migrated workflows use generic registry/forms/tasks/integration bindings before adding bespoke web surfaces.
 - [ ] New hardcoded pages/routes are added to `pageSync.ts` / `routeSync.ts`.
 - [ ] `npm run typecheck` and `npm test` pass.
 

@@ -48,6 +48,36 @@ describe("EmailService", () => {
       expect.objectContaining({
         to: "recipient@example.com",
         subject: "Welcome",
+        context: expect.objectContaining({ verificationUrl: "[redacted]" }),
+      }),
+      expect.stringContaining("Mock Email Sent")
+    );
+  });
+
+  it("redacts workflow task token URLs from mock email logs", async () => {
+    vi.mocked(settingService.get).mockImplementation(async (key) => {
+      if (key === "EMAIL_PROVIDER") return "mock";
+      if (key === "EMAIL_FROM") return "noreply@example.com";
+      if (key === "SITE_NAME") return "Test App";
+      return "";
+    });
+
+    await service.send({
+      to: "recipient@example.com",
+      subject: "Workflow task awaiting your response",
+      templateName: "workflow-task",
+      context: {
+        taskUrl: "https://app.example.com/workflow-task-tokens/raw-token",
+        expiresAt: "2026-08-14T00:00:00.000Z",
+      },
+    });
+
+    expect(service.log.info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context: {
+          taskUrl: "[redacted]",
+          expiresAt: "2026-08-14T00:00:00.000Z",
+        },
       }),
       expect.stringContaining("Mock Email Sent")
     );
@@ -95,10 +125,18 @@ describe("EmailService", () => {
         to: "recipient@example.com",
         subject: "Welcome",
         templateName: "invalid-template" as any,
-        context: {},
+        context: { resetUrl: "https://app.example.com/reset/token-value" },
       })
     ).rejects.toThrow();
 
     expect(service.log.error).toHaveBeenCalled();
+    expect(service.log.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        options: expect.objectContaining({
+          context: { resetUrl: "[redacted]" },
+        }),
+      }),
+      expect.stringContaining("Failed to send email")
+    );
   });
 });

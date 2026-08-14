@@ -1,0 +1,85 @@
+<div class="space-y-6">
+  <div>
+    <a href="/admin/workflow-operations/schedules?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Back to schedules</a>
+    <h1 class="mt-2 text-2xl font-semibold text-gray-900">New Workflow Schedule</h1>
+    <p class="mt-1 text-sm text-gray-600">Create a Temporal schedule for one workflow definition. Required integrations must already be configured for this organization.</p>
+    <p class="mt-1 text-xs text-gray-500">Organization: {{activeOrg.name}}</p>
+  </div>
+
+  {{#if query.error}}
+    <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{query.error}}</div>
+  {{/if}}
+
+  <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <form method="POST" action="/admin/workflow-operations/schedules" class="grid gap-4">
+      <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Workflow</span>
+        <select name="workflowDefinitionId" class="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+          {{#each definitions}}
+            <option value="{{id}}">{{name}} · {{key}}</option>
+          {{/each}}
+        </select>
+      </label>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <label class="grid gap-1">
+          <span class="text-sm font-medium text-gray-700">Schedule name</span>
+          <input name="name" placeholder="Daily heartbeat" class="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm font-medium text-gray-700">Timezone</span>
+          <input name="timezone" value="UTC" class="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+        </label>
+      </div>
+
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Description</span>
+        <textarea name="description" rows="2" class="rounded-md border border-gray-300 px-3 py-2 text-sm"></textarea>
+      </label>
+
+      <div class="grid gap-4 md:grid-cols-3">
+        <label class="grid gap-1">
+          <span class="text-sm font-medium text-gray-700">Cron expression</span>
+          <input name="cronExpression" placeholder="0 * * * *" class="font-mono rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm font-medium text-gray-700">Overlap policy</span>
+          <select name="overlapPolicy" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+            <option value="SKIP">Skip</option>
+            <option value="BUFFER_ONE">Buffer one</option>
+            <option value="BUFFER_ALL">Buffer all</option>
+            <option value="CANCEL_OTHER">Cancel other</option>
+            <option value="TERMINATE_OTHER">Terminate other</option>
+            <option value="ALLOW_ALL">Allow all</option>
+          </select>
+        </label>
+        <label class="grid gap-1">
+          <span class="text-sm font-medium text-gray-700">Catch-up window seconds</span>
+          <input name="catchupWindowSeconds" value="60" type="number" min="1" max="86400" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+        </label>
+      </div>
+
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Workflow input JSON</span>
+        <textarea name="inputJson" rows="8" class="font-mono rounded-md border border-gray-300 px-3 py-2 text-xs">{}</textarea>
+      </label>
+
+      <div class="flex flex-wrap gap-4">
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <input type="checkbox" name="pauseOnFailure" class="rounded border-gray-300" checked>
+          Pause schedule on workflow failure
+        </label>
+        <label class="flex items-center gap-2 text-sm font-medium text-gray-700">
+          <input type="checkbox" name="paused" class="rounded border-gray-300">
+          Create paused
+        </label>
+      </div>
+
+      <div>
+        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create Schedule</button>
+      </div>
+    </form>
+  </section>
+</div>

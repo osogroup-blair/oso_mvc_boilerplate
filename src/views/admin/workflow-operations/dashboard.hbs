@@ -1,0 +1,137 @@
+<div class="space-y-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <h1 class="text-2xl font-semibold text-gray-900">Workflow Operations</h1>
+      <p class="mt-1 text-sm text-gray-600">Temporal cluster, worker, schedules, and projection reconciliation for this deployment.</p>
+      <p class="mt-1 text-xs text-gray-500">Organization: {{activeOrg.name}}</p>
+    </div>
+    <div class="flex gap-2">
+      <a href="/admin/workflow-operations/schedules?orgId={{activeOrg.id}}" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Schedules</a>
+      {{#if temporalUiBaseUrl}}
+        <a href="{{temporalUiBaseUrl}}" target="_blank" rel="noreferrer" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Temporal UI</a>
+      {{/if}}
+    </div>
+  </div>
+
+  {{#if query.reconciled}}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Projection reconciliation attempted for {{query.reconciled}} execution(s).</div>
+  {{/if}}
+
+  <section class="grid gap-4 md:grid-cols-3">
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Temporal Cluster</div>
+      <div class="mt-2 text-2xl font-semibold {{#if (eq temporal.status 'ok')}}text-green-700{{else}}text-red-700{{/if}}">{{temporal.status}}</div>
+      <p class="mt-2 text-xs text-gray-500">{{temporal.address}} · {{temporal.namespace}}</p>
+      {{#if temporal.latencyMs}}<p class="mt-1 text-xs text-gray-500">{{temporal.latencyMs}}ms latency</p>{{/if}}
+      {{#if temporal.error}}<p class="mt-2 text-sm text-red-700">{{temporal.error}}</p>{{/if}}
+    </div>
+
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Worker Reachability</div>
+      <div class="mt-2 text-2xl font-semibold {{#if worker.reachable}}text-green-700{{else}}text-amber-700{{/if}}">
+        {{#if worker.reachable}}reachable{{else}}unknown{{/if}}
+      </div>
+      <p class="mt-2 text-xs text-gray-500">Task queue: {{worker.expectedTaskQueue}}</p>
+      <p class="mt-1 text-xs text-gray-500">Workflow pollers: {{worker.workflowPollerCount}} · Activity pollers: {{worker.activityPollerCount}}</p>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Schedules</div>
+      <div class="mt-2 text-2xl font-semibold text-gray-900">{{scheduleCounts.ACTIVE}} active</div>
+      <p class="mt-2 text-xs text-gray-500">{{scheduleCounts.PAUSED}} paused · {{scheduleCounts.ERROR}} error · {{scheduleCounts.DELETED}} deleted</p>
+      <a href="/admin/workflow-operations/schedules?orgId={{activeOrg.id}}" class="mt-3 inline-flex text-sm font-medium text-indigo-600 hover:text-indigo-700">Manage schedules</a>
+    </div>
+  </section>
+
+  <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="flex items-start justify-between gap-4">
+      <div>
+        <h2 class="text-lg font-semibold text-gray-900">Projection Reconciliation</h2>
+        <p class="mt-1 text-sm text-gray-600">Find executions that still look pending/running in Postgres after {{query.staleMinutes}} minutes and refresh them from Temporal.</p>
+      </div>
+      <form method="POST" action="/admin/workflow-operations/reconcile" class="flex items-center gap-2">
+        <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+        <input type="hidden" name="staleMinutes" value="{{query.staleMinutes}}">
+        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Reconcile stale</button>
+      </form>
+    </div>
+
+    <form method="GET" action="/admin/workflow-operations" class="mt-4 flex flex-wrap items-end gap-3">
+      <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Stale after minutes</span>
+        <input name="staleMinutes" value="{{query.staleMinutes}}" type="number" min="1" max="1440" class="w-40 rounded-md border border-gray-300 px-3 py-2 text-sm">
+      </label>
+      <button type="submit" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Refresh</button>
+    </form>
+
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Execution</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Workflow</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Status</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Last Synced</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {{#each staleExecutions}}
+            <tr>
+              <td class="px-4 py-3">
+                <a href="/workflows/executions/{{id}}" class="font-mono text-xs text-indigo-600 hover:text-indigo-700">{{temporalWorkflowId}}</a>
+              </td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{workflowDefinition.name}}</td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{status}}</td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{lastSyncedAt}}</td>
+            </tr>
+          {{else}}
+            <tr>
+              <td colspan="4" class="px-4 py-8 text-center text-sm text-gray-500">No stale running projections found.</td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-semibold text-gray-900">Worker Pollers</h2>
+    <p class="mt-1 text-sm text-gray-600">Temporal reports pollers by identity when the service can describe the configured task queue.</p>
+    <div class="mt-4 overflow-x-auto">
+      <table class="min-w-full divide-y divide-gray-200">
+        <thead class="bg-gray-50">
+          <tr>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Identity</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Type</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-600">Last Access</th>
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-gray-100">
+          {{#each worker.pollers}}
+            <tr>
+              <td class="px-4 py-3 font-mono text-xs text-gray-700">{{identity}}</td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{taskQueueType}}</td>
+              <td class="px-4 py-3 text-sm text-gray-700">{{lastAccessTime}}</td>
+            </tr>
+          {{else}}
+            <tr>
+              <td colspan="3" class="px-4 py-8 text-center text-sm text-gray-500">No poller details reported yet.</td>
+            </tr>
+          {{/each}}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  {{#if operationalNotes}}
+    <section class="rounded-lg border border-amber-200 bg-amber-50 p-5">
+      <h2 class="text-sm font-semibold text-amber-900">Operational notes</h2>
+      <ul class="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-900">
+        {{#each operationalNotes}}
+          <li>{{this}}</li>
+        {{/each}}
+      </ul>
+    </section>
+  {{/if}}
+</div>

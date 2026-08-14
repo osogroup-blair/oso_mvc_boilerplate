@@ -28,6 +28,32 @@ Model         Prisma queries only. Soft-delete aware. No logic.
 Prisma → PostgreSQL
 ```
 
+Temporal introduces a second process path without changing the HTTP layering:
+
+```
+Temporal Worker
+   │
+   ▼
+Workflow       deterministic orchestration code only
+   │
+   ▼
+Activity       calls application services or integration adapters
+   │
+   ▼
+Service → Model → Prisma
+```
+
+The web process owns the Temporal Client gateway. The Worker process owns
+Workflow bundles and Activities. `server.ts` must not start the Temporal Worker,
+and application controllers must not import Worker or Workflow implementation
+modules.
+
+Workflow integrations follow the same rule. Admins create organization-scoped
+integration connections and bind them to workflow requirements in the web app,
+but Workflows never receive credentials. Activities resolve bindings through
+`integration-resolver.service.ts`, decrypt credentials inside the Worker
+process, and pass only non-secret results back into Workflow history.
+
 Server-rendered views receive a **JSON payload** built by the controller and
 render it with Handlebars. Views never fetch data.
 
@@ -58,7 +84,7 @@ page, or fall through to 404.
 ## Annotated file map
 ```
 src/
-  server.ts              Process entry: starts HTTP server, calls syncAppPages/syncAppRoutes, graceful shutdown.
+  server.ts              Process entry: starts HTTP server, calls syncAppPages/syncAppRoutes/syncWorkflowDefinitions, graceful shutdown.
   app.ts                 Express assembly: middleware order, Handlebars, helpers, routes.
 
   config/index.ts        Zod-validated env. The ONLY place process.env is read.
@@ -72,6 +98,11 @@ src/
     sanitize.ts            Strip HTML from user strings (anti-XSS).
     pageSync.ts            Startup utility: upserts hardcoded app pages into the DB.
     routeSync.ts           Startup utility: upserts known Express routes into the DB as APP-type Route records.
+    temporalClient.ts      Temporal Client gateway for diagnostics, task-queue poller checks, start, describe, query, cancel, signal, and schedules.
+    workflowSync.ts        Startup utility: syncs code-registered workflow definitions into the DB catalog.
+
+  integrations/
+    provider-registry.ts   Code-owned provider registry. Providers declare config/credential schemas, tests, redaction, and Activity adapters.
 
   middleware/
     requestId.ts           Correlation id per request.
@@ -87,6 +118,7 @@ src/
 
   services/              Business logic. Extend BaseService.
     BaseService.ts         Scoped logger + DI convention.
+    health.service.ts      Aggregates DB and Temporal connectivity for /health.
     auth.service.ts        Sessions, login, verify, logout.
     permissions.service.ts Role→action matrix; can()/assert(); getActionsForRole().
     cache.service.ts       Swappable cache (Map → Redis).
@@ -103,6 +135,24 @@ src/
     project.service.ts     Project CRUD. Owner FK. Soft-delete aware.
     task.service.ts        Task CRUD with M2M tag management (TaskTag join rows).
     tag.service.ts         Tag vocabulary CRUD.
+    organizationContext.service.ts  Resolves active organization context without guessing among multiple memberships.
+    workflow-catalog.service.ts     Syncs workflow code registrations, admin metadata, role policy, and user catalog filtering.
+    workflow-execution.service.ts   Starts Temporal workflows, maintains the DB execution projection, refreshes state, and cancels runs.
+    workflow-human-task.service.ts  Creates durable human tasks from Activities, lists/action-checks inbox tasks, sends token links, signals workflow actions, and records receipts.
+    integration.service.ts          Admin connection CRUD, credential rotation/testing, workflow binding validation, start gating, and audit redaction.
+    integration-resolver.service.ts Activity-side binding lookup, provider validation, and credential decryption seam.
+    credential-encryption.service.ts AES-256-GCM credential encryption/decryption plus non-secret fingerprints.
+    activity-idempotency.service.ts Activity operation idempotency for retry-safe integration side effects.
+                                    Stale RUNNING claims recover after the admin-managed Workflow Operations timeout.
+    workflow-schedule.service.ts   App-owned Temporal schedule projection lifecycle: create, describe/sync, pause, unpause, trigger, delete.
+    workflow-operations.service.ts Worker/cluster diagnostics and stale execution projection reconciliation.
+
+  temporal/
+    forms.ts               Serializable workflow form vocabulary used by registry metadata.
+    workflow-registry.ts   Code-owned workflow registration list and collision validation.
+    worker.ts              Separate Temporal Worker process entrypoint. Does not import Express/server.
+    workflows/             Deterministic Workflow modules. No services, Prisma, Node I/O, or config imports.
+    activities/            Activity modules. May call application services and integration adapters.
 
   models/                Prisma wrappers. Extend BaseModel. Soft-delete aware.
     BaseModel.ts           Shared soft-delete filter helpers.
@@ -111,6 +161,12 @@ src/
     auditLog.model.ts      Supports LogFilters (actorId, entityType, action, from/to).
     role.model.ts
     route.model.ts         Includes allowedRoles (RouteRole[]) with role relation.
+    workflowDefinition.model.ts  Workflow catalog, role policy, and integration requirement query wrapper.
+    workflowExecution.model.ts   Organization-scoped workflow execution projection queries.
+    workflowHumanTask.model.ts   Durable human task, role visibility, token, and action receipt query wrapper.
+    integrationConnection.model.ts  Organization integration connection queries with safe/secret projections.
+    workflowIntegrationBinding.model.ts  Organization workflow requirement binding queries.
+    activityIdempotency.model.ts Activity idempotency reservation/result queries.
     navigationItem.model.ts  Recursive include for children.
     session.model.ts       listActive / countActive / findById / deleteById (hard delete).
     setting.model.ts       getAll / set (key-value store).
@@ -126,12 +182,17 @@ src/
     log.controller.ts      Audit log list/detail, diagnostics dashboard, live log stream (SSE).
     project.controller.ts  Public-facing project index, show, and task form pages.
     task.controller.ts     REST API for tasks (create, update, delete, tag management).
+    workflow.controller.ts Authenticated workflow catalog, start form, execution list/detail, refresh, and cancel handlers.
+    workflowTask.controller.ts Authenticated workflow task inbox/detail/action handlers plus public token task handlers.
     resourceRegistry.ts    Maps admin model key → AdminResource interface (the CRUD seam).
 
     admin/                 Feature-specific admin controllers (break out of generic CRUD).
       permission.admin.controller.ts  Role × Resource permission matrix view + save.
       session.admin.controller.ts     Active session list + force-logout.
       setting.admin.controller.ts     Grouped settings form (get/post per group).
+      workflow.admin.controller.ts    Workflow definition metadata and role capability policy.
+      integration.admin.controller.ts Organization integration connections and workflow requirement bindings.
+      workflow-operations.admin.controller.ts Temporal operations dashboard, schedule admin, and projection reconciliation.
 
   routes/
     index.ts               Mounts all route groups.
@@ -141,9 +202,14 @@ src/
     page.routes.ts         /pages/:slug
     project.routes.ts      /projects (public-facing project pages)
     task.routes.ts         /api/projects/:projectId/tasks and /api/tasks (tag endpoints)
+    workflow.routes.ts     /workflows authenticated workflow catalog and execution screens
+    workflowTask.routes.ts /workflow-tasks authenticated task inbox and /workflow-task-tokens public token task links
 
     admin/
       setting.admin.routes.ts  /admin/settings (GET index, POST update-group)
+      workflow.admin.routes.ts  /admin/workflows catalog configuration
+      integration.admin.routes.ts /admin/integrations connection CRUD, tests, credential rotation, and workflow bindings
+      workflow-operations.admin.routes.ts /admin/workflow-operations diagnostics, schedules, and reconciliation
 
   admin/                 Schema-driven admin system.
     schema.types.ts        Field/schema type vocabulary (FieldDef, AdminSchema, etc.).
@@ -180,12 +246,30 @@ src/
         list.hbs           Active session table with force-logout button per row.
       settings/
         index.hbs          Grouped settings form (Identity, Content, Email, Security, UI).
+      workflows/
+        list.hbs           Admin workflow definition list.
+        detail.hbs         Admin workflow metadata and role capability matrix.
+      integrations/
+        list.hbs           Organization connection list with provider/test status.
+        new.hbs            Create connection form; credentials are write-only.
+        detail.hbs         Connection metadata, test, rotate credentials, and disable actions.
+        workflow-bindings.hbs Workflow requirement-to-connection binding matrix.
+      workflow-operations/
+        dashboard.hbs      Temporal diagnostics, worker pollers, schedule counts, and stale projection reconciliation.
+        schedules.hbs      Organization schedule list.
+        new-schedule.hbs   Temporal schedule create form.
+        schedule-detail.hbs Schedule status, Temporal description, pause/unpause/trigger/delete controls.
     pages/
       show.hbs             Public CMS page renderer (walks blocks array).
     projects/
       index.hbs            Public project list.
       show.hbs             Public project detail + task list.
       form.hbs             Task create/edit form.
+    workflows/
+      catalog.hbs          Authenticated workflow catalog for the active organization.
+      start.hbs            Generic workflow start form rendered from registry metadata.
+      executions.hbs       Organization-scoped execution list.
+      execution-detail.hbs Execution status, summaries, refresh, and cancel controls.
     maintenance.hbs        Standalone HTTP 503 page (no layout).
     error.hbs              Generic error page.
     helpers/
@@ -207,7 +291,7 @@ Domain
   Post          id/title/body/published/authorId — 1-to-many child of User
   Session       id/userId/token/expiresAt — hard-deleted on revoke; no soft delete
   AuditLog      id/actorId/action/entityType/entityId/changes(JSON)
-  Role          id/name/description/permissions(String[])/users/pageRoles/routeRoles
+  Role          id/name/description/permissions(String[])/users/pageRoles/routeRoles/workflowDefinitionRoles
 
 CMS
   Page          id/slug/title/status(PageStatus)/blocks(JSON)/seo(JSON)/allowedRoles(PageRole[])/isHardcoded/filePath/publishedAt
@@ -231,6 +315,35 @@ Demo: Project / Task / Tag Manager
 
 Configuration
   SiteSetting   id/key(unique)/value — global key-value store for site config
+
+Multi-Tenancy
+  Organization  id/name/slug/logoUrl/members
+  OrgMember     orgId/userId/role(OrgRole)/joinedAt — soft-deleted membership
+  OrgRole       enum: OWNER | ADMIN | MEMBER
+
+Workflow Platform
+  WorkflowDefinition  key/slug/workflowType/contractVersion/defaultTaskQueue/name/description/category/icon/isEnabled/presentation(JSON)
+  WorkflowDefinitionRole  workflowDefinitionId/roleId/capability(WorkflowCapability)
+  WorkflowIntegrationRequirement  workflowDefinitionId/key/providerKey/capabilityKey/label/description/isRequired
+  IntegrationConnection  orgId/name/providerKey/status/config/credentialCiphertext/credentialIv/credentialAuthTag/credentialKeyVersion/credentialFingerprint/lastTestedAt/lastTestStatus/lastTestMessage/disabledAt
+  WorkflowIntegrationBinding  orgId/workflowDefinitionId/requirementKey/connectionId/isEnabled/lastValidatedAt/lastValidationStatus/lastValidationMessage
+  ActivityIdempotency  orgId/scope/idempotencyKey/status/requestHash/response/error/lockedAt/completedAt/expiresAt
+  WorkflowSchedule  orgId/workflowDefinitionId/createdById/scheduleId/name/description/cronExpression/timezone/input/inputSummary/status/overlapPolicy/catchupWindowSeconds/pauseOnFailure/lastTemporalStatus/lastSyncedAt/pausedAt
+  WorkflowExecution  orgId/workflowDefinitionId/startedById/workflowId/runId/businessKey/status/inputSummary/stateSummary/error/startedAt/completedAt/lastSyncedAt
+  WorkflowHumanTask  orgId/workflowExecutionId/workflowId/runId/taskKey/taskType/title/description/status/assignedUserId/actionForm/context/result/dueAt/openedAt/closedAt
+  WorkflowHumanTaskRole  taskId/roleId
+  WorkflowTaskToken  taskId/tokenHash/recipientEmail/label/expiresAt/consumedAt/revokedAt
+  WorkflowActionReceipt  orgId/taskId/workflowExecutionId/actionKey/idempotencyKey/channel/status/actorUserId/tokenId/requestHash/result/error
+  WorkflowCapability enum: START | VIEW | ACT | CANCEL | ADMIN
+  WorkflowExecutionStatus enum: PENDING | RUNNING | COMPLETED | FAILED | CANCELED | TERMINATED | TIMED_OUT | UNKNOWN
+  WorkflowHumanTaskStatus enum: OPEN | COMPLETED | CANCELED | EXPIRED
+  WorkflowActionChannel enum: AUTHENTICATED | TOKEN
+  WorkflowActionReceiptStatus enum: RECEIVED | SUCCEEDED | FAILED
+  IntegrationConnectionStatus enum: ACTIVE | DISABLED | CONFIG_ERROR
+  IntegrationTestStatus enum: NOT_TESTED | SUCCEEDED | FAILED
+  ActivityIdempotencyStatus enum: RECEIVED | RUNNING | SUCCEEDED | FAILED
+  WorkflowScheduleStatus enum: ACTIVE | PAUSED | DELETED | ERROR
+  WorkflowScheduleOverlapPolicy enum: SKIP | BUFFER_ONE | BUFFER_ALL | CANCEL_OTHER | TERMINATE_OTHER | ALLOW_ALL
 ```
 
 ## Cross-cutting systems
@@ -261,6 +374,9 @@ The admin `/settings` page groups them by `SETTING_KEYS[key].group`.
 To add a new setting: add an entry to the `SETTING_KEYS` object in
 `setting.service.ts`. No migration needed — the key-value table is schema-free.
 
+`PUBLIC_APP_URL` is the admin-managed absolute base URL used for workflow task
+email links. Do not put that behavior in `.env`.
+
 ### Maintenance Mode
 `maintenanceMiddleware` reads `MAINTENANCE_MODE` from `settingService`. If
 `true`, non-admin and non-asset requests receive HTTP 503 + `maintenance.hbs`.
@@ -277,6 +393,175 @@ so all Handlebars templates can render the nav without fetching data.
 backed by real `.hbs` files, e.g. `/projects`, `/admin/login`) into the `Page`
 table so the admin can see them, assign access roles, and they appear in nav.
 
+### Workflow Catalog Sync
+`workflowSync.ts` runs at startup after page/route sync. It validates the
+code-owned registry in `temporal/workflow-registry.ts`, upserts immutable code
+facts into `WorkflowDefinition`, and syncs declared integration requirements.
+Admins may edit only safe metadata (`name`, `description`, `category`, `icon`,
+`presentation`, `isEnabled`) and role capabilities. Executable workflow code,
+workflow type names, validators, actions, and integration requirement keys come
+from deployed TypeScript code, not database-authored code.
+
+User catalog visibility at `/workflows` requires an active organization context,
+global `workflow:read`, an enabled definition, and a matching
+`WorkflowDefinitionRole` row with `VIEW` or `START`. When a user belongs to
+multiple organizations, the app asks them to choose instead of silently choosing
+the first membership.
+
+### Workflow Executions
+Authenticated users start workflows from registry-defined forms at
+`/workflows/:slug`. The controller validates request shape, then
+`workflow-execution.service.ts` re-validates against the code-owned registry,
+checks global `workflow:start`, enforces per-definition `START`, verifies that
+all required workflow integration bindings are available for the active
+organization, starts Temporal through `temporalClient.ts`, and creates a
+`WorkflowExecution` projection row.
+
+Execution detail pages are backed by the DB projection, not by direct view-layer
+Temporal calls. Refreshing an execution describes the Temporal run, maps Temporal
+status into `WorkflowExecutionStatus`, optionally queries the workflow's
+registered state query, summarizes the state, and stores it in `stateSummary`.
+Cancel requires global `workflow:cancel` plus per-definition `CANCEL`, calls the
+Temporal Client gateway, updates the projection, and audits the mutation.
+
+### Workflow Human Tasks
+Temporal Workflows surface user input by calling the `createHumanTask` Activity.
+That Activity delegates to `workflow-human-task.service.ts`, which creates a
+durable `WorkflowHumanTask` row with an action form, optional assigned user,
+role visibility, optional email token, and context JSON. Creation is idempotent
+by `(workflowExecutionId, taskKey)` so Temporal Activity retries/replays do not
+duplicate tasks.
+
+Authenticated users use `/workflow-tasks` and `/workflow-tasks/:id` to see and
+act on tasks assigned directly to them or to their role. Public email links use
+`/workflow-task-tokens/:token` and store only a SHA-256 token hash in the
+database. Browser POSTs are protected with the app CSRF middleware and action
+submissions are idempotent through `WorkflowActionReceipt`.
+
+When an action is submitted, the service validates visibility/capability,
+records a receipt, signals Temporal through `temporalClient.signalWorkflow()`,
+closes the task, consumes token links when applicable, and audits the mutation.
+Workflow code receives only the signal payload; it does not import app services,
+models, Prisma, email, or settings.
+
+### Workflow Integrations
+Workflow integration requirements are declared in
+`src/temporal/workflow-registry.ts` and synced to
+`WorkflowIntegrationRequirement`. Admins manage actual organization connections
+at `/admin/integrations`, where credentials are write-only, encrypted with
+`credential-encryption.service.ts`, redacted in audit logs, and testable through
+the provider registry.
+
+Requirement bindings are organization-scoped
+`WorkflowIntegrationBinding` rows. The public workflow start page renders each
+required binding as `AVAILABLE`, `MISSING`, `DISABLED`,
+`PROVIDER_MISMATCH`, or `CONNECTION_UNAVAILABLE`; required unavailable
+bindings block launch before Temporal is called.
+
+Activities resolve integrations through `integration-resolver.service.ts`. The
+resolver loads the bound connection, decrypts credentials in the Worker process,
+validates provider schemas, and returns a provider adapter. Workflow code never
+imports the resolver and never stores credentials in Workflow history. Activity
+side effects should use `activity-idempotency.service.ts` with a stable
+idempotency key so Temporal retries do not duplicate external operations.
+Stale `RUNNING` claims are recovered only through a conditional DB takeover
+after the admin-managed Workflow Operations timeout.
+
+### Migrated Showcase Workflows
+The first showcase migration waves live in the generic workflow platform, not
+in workflow-specific web surfaces. `showcase.customerOnboarding`,
+`showcase.humanApproval`, `showcase.orderFulfillmentSaga`, and
+`showcase.dataSynchronization`, `showcase.employeeLifecycle`, and
+`showcase.clientEngagement`, `showcase.aiDocumentProcessing`, and
+`showcase.aiSupportAgent`, `showcase.complianceReview`, and
+`showcase.underwritingCapstone` are registered in
+`src/temporal/workflow-registry.ts`, synced into `WorkflowDefinition`, enabled
+for seeded admin role policy, and bound to the seeded `synthetic.echo`
+integration requirement through `WorkflowIntegrationBinding`.
+
+Both workflows use the existing `/workflows` start/detail/refresh screens and
+the existing `/workflow-tasks` plus `/workflow-task-tokens` human-task surfaces.
+If a migrated workflow needs user input, it creates a durable
+`WorkflowHumanTask`; submitted action data is validated by the registered action
+schema and delivered to Workflow code as `WorkflowHumanActionInput.payload`.
+If a migrated workflow needs an integration, Activity code resolves the
+admin-bound provider connection and wraps the side effect in
+`activity-idempotency.service.ts`. The Workflow stores only non-secret state
+needed for queries and summaries.
+
+Future product workflow migrations should follow this same route:
+registry metadata/forms/actions/integration requirements first, deterministic
+Workflow implementation second, Activity-side services/integrations third, and
+only then a new route or template if the generic renderer cannot express a
+genuinely domain-specific experience.
+
+`showcase.orderFulfillmentSaga` demonstrates reverse compensation without a
+Postgres-backed workflow engine: the Workflow keeps the compensation stack in
+Temporal history and Activities perform retry-safe synthetic side effects using
+`ActivityIdempotency`. `showcase.dataSynchronization` demonstrates parallel
+fan-out/fan-in across CRM, ERP, and Billing targets, then targeted
+reconciliation for mismatched targets. Both still use the generic start and
+execution projection screens.
+
+`showcase.employeeLifecycle` demonstrates long-running timers, identity/access
+provisioning, manager checklist input through durable `WorkflowHumanTask`, and
+cancellation cleanup. `showcase.clientEngagement` demonstrates phased delivery,
+real Temporal child workflows for implementation workstreams, client approval
+through the generic task inbox/token surfaces, blocker tracking, go-live, and
+post-launch review. These workflows also stay inside the generic registry,
+integration binding, and execution projection model.
+
+`showcase.aiDocumentProcessing` demonstrates document-reference processing,
+AI-style classification/extraction, enrichment, confidence and validation gates,
+human correction, and result storage. `showcase.aiSupportAgent` demonstrates
+safe-message triage, customer/invoice context lookup, approval-gated tool
+execution, outcome validation, and response summaries. These workflows use only
+document references, safe summaries, structured outputs, and non-secret tool
+results in Workflow input/state. Raw files, prompts, transcripts, and provider
+credentials stay outside Temporal history and are handled only by
+Activity-side integration seams.
+
+`showcase.complianceReview` demonstrates schedule-compatible reviews,
+automated control checks, multiple simultaneous evidence tasks, reminders,
+escalations, late evidence handling, and report generation.
+`showcase.underwritingCapstone` demonstrates parent/child risk-check workflows,
+missing-information loops, analyst approve/reject/request-more-information
+decisions, cancellation cleanup, and decision history. Both continue to use the
+generic workflow catalog, start forms, integration binding checks,
+`WorkflowHumanTask` action surfaces, execution projections, and admin Temporal
+schedule tooling instead of workflow-specific web routes.
+
+### Workflow Operations and Schedules
+Admins with `workflow:admin` use `/admin/workflow-operations` to inspect
+Temporal connectivity, configured task-queue pollers, app schedule counts, and
+stale execution projections. The dashboard intentionally treats Temporal as
+authoritative for workflow histories and timers; the application database stores
+admin configuration and queryable projections.
+
+`WorkflowSchedule` is the app-owned projection for Temporal schedules. Creating
+a schedule at `/admin/workflow-operations/schedules/new` validates the selected
+workflow definition, registry start input, required integration bindings, cron
+expression, overlap policy, catch-up window, and organization context before
+calling the Temporal Schedule API through `temporalClient.ts`. The service then
+stores a local projection and audits the mutation. If the DB write fails after
+Temporal creation, the service attempts to delete the Temporal schedule so the
+two systems do not drift.
+
+Schedule pause, unpause, trigger, and delete actions always go through
+`workflow-schedule.service.ts`. Delete removes the Temporal schedule and
+soft-deletes the local projection. Detail pages call `describeSchedule()` and
+sync `lastTemporalStatus`; if Temporal cannot describe the schedule, the local
+projection moves to `ERROR` with the error summary.
+
+Scheduled workflow executions are not fabricated in Postgres from admin schedule
+actions. A scheduled run appears in `WorkflowExecution` when the real Workflow
+run calls the projection-ingestion Activity near startup. Temporal UI and the
+schedule detail page remain the source of truth for schedule action history.
+
+The reconciliation action refreshes stale `PENDING`, `RUNNING`, or `UNKNOWN`
+`WorkflowExecution` rows from Temporal through `workflow-execution.service.ts`.
+It is safe to re-run and audits attempted/succeeded/failed counts.
+
 ### Admin Sub-controllers
 Not everything fits the generic CRUD controller. Feature-specific admin pages
 live in `controllers/admin/` and `routes/admin/`:
@@ -286,6 +571,12 @@ live in `controllers/admin/` and `routes/admin/`:
   calls `sessionService.revoke()`.
 - **Settings** (`setting.admin.controller.ts`): renders the grouped settings
   form and calls `settingService.setMany()`.
+- **Integrations** (`integration.admin.controller.ts`): manages organization
+  integration connections, credential tests/rotation, disabling, and workflow
+  requirement bindings.
+- **Workflow operations** (`workflow-operations.admin.controller.ts`): manages
+  Temporal diagnostics, schedule administration, and stale execution projection
+  reconciliation.
 
 ## Worked example — add a `Product` resource end-to-end
 This is the canonical vertical slice. Each step cites its skill.
@@ -342,4 +633,16 @@ Nothing here is invented per-resource — every step copies the `user.*` or
   (permissions matrix, session management, settings).
 - **Page sync / Route sync**: startup utilities (`pageSync.ts`, `routeSync.ts`)
   that upsert hardcoded app surfaces into the DB so admins can manage them.
+- **Integration connection**: an organization-scoped provider configuration
+  whose credentials are encrypted with a versioned key ring and never returned
+  to views.
+- **Workflow integration binding**: an organization-scoped mapping from a
+  workflow requirement key to an active connection.
+- **Activity idempotency**: the retry-safe reservation/result record Activities
+  use when an external side effect must happen at most once per stable key.
+- **Workflow schedule**: an app-owned projection of a Temporal Schedule,
+  configured in admin and synchronized through the Temporal Schedule API.
+- **Projection reconciliation**: an admin operation that refreshes stale local
+  `WorkflowExecution` rows from Temporal history without changing workflow
+  execution itself.
 

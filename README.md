@@ -173,6 +173,7 @@ src/
   models/         # Database query wrappers (BaseModel + user, auditLog, role, page, route)
   controllers/    # Route handlers (REST controllers + dynamic admin controller)
   routes/         # Endpoint mappings (health, user, index, admin, pages)
+  temporal/       # Separate Temporal worker bootstrap, workflows, and activities
   admin/          # Schema-driven admin system (definitions, registry, field/model schemas)
   views/          # Handlebars layouts, partials, blocks, and forms
 prisma/           # Database schema definition and seed scripts
@@ -211,6 +212,113 @@ Once setup is complete, open:
 
 ---
 
+## Temporal local runtime
+
+Temporal is installed as a self-hosted local runtime. The app can connect to a
+local Temporal service, and a separate Temporal Worker process runs workflow
+code. The generic workflow platform includes a code-owned workflow registry,
+database-synced workflow catalog, admin enablement/role policy at
+`/admin/workflows`, and authenticated user screens at `/workflows` for catalog,
+start forms, execution lists, execution detail, refresh, and cancel.
+
+The platform also includes:
+
+* **Human tasks:** `/workflow-tasks` for authenticated task inbox/action forms
+  and `/workflow-task-tokens/:token` for public email-link actions.
+* **Workflow integrations:** `/admin/integrations` for organization-scoped
+  integration connections, credential tests/rotation, and workflow requirement
+  bindings. Workflow start pages surface required integration availability and
+  block launch when a required binding is missing or unavailable.
+* **Activity-side secret resolution:** integration credentials are encrypted in
+  the app database, decrypted only inside Activity-side services, and never
+  passed into Workflow history.
+* **Activity idempotency:** external side effects use stable idempotency
+  reservations; stale `RUNNING` claims can be recovered after the Workflow
+  Operations timeout configured in `/admin/settings`.
+* **Workflow operations:** `/admin/workflow-operations` for Temporal cluster
+  diagnostics, task-queue poller visibility, schedule counts, and stale
+  execution projection reconciliation.
+* **Temporal schedules:** `/admin/workflow-operations/schedules` for
+  organization-scoped schedule create/detail/pause/unpause/trigger/delete. The
+  Temporal Schedule API owns timers; the app stores an audited schedule
+  projection, and real scheduled Workflow runs ingest their own
+  `WorkflowExecution` projection near startup.
+* **Migrated showcase workflows:** `showcase.customerOnboarding`,
+  `showcase.humanApproval`, `showcase.orderFulfillmentSaga`, and
+  `showcase.dataSynchronization`, `showcase.employeeLifecycle`, and
+  `showcase.clientEngagement`, `showcase.aiDocumentProcessing`, and
+  `showcase.aiSupportAgent`, `showcase.complianceReview`, and
+  `showcase.underwritingCapstone` run through the same generic registry, start
+  forms, integration bindings, human-task inbox/token links when needed, child
+  workflows where useful, Temporal schedules where configured, and execution
+  projection screens. They do not add workflow-specific Express routes or
+  templates. AI/file-oriented workflows use safe references and summaries
+  instead of storing raw documents, prompts, transcripts, or provider
+  credentials in Temporal history.
+
+```bash
+# Start self-hosted Temporal services: persistence Postgres, Temporal, and UI
+npm run temporal:up
+
+# Start the web app
+npm run dev
+
+# In a separate terminal, start the Temporal Worker
+npm run dev:temporal-worker
+```
+
+Local ports:
+
+| Service | Port |
+|---------|------|
+| App Postgres | 5436 |
+| Temporal Postgres | 5437 |
+| Temporal gRPC | 7243 |
+| Temporal UI | 8243 |
+
+The `/health` endpoint reports database and Temporal connectivity. Temporal
+configuration lives in `.env` and is validated in `src/config/index.ts`;
+workflow behavior such as labels, enablement, role policy, and execution
+visibility is controlled through admin/database configuration. Workflow task
+email links use the `PUBLIC_APP_URL` site setting from `/admin/settings`.
+
+Operational admin surfaces:
+
+| Surface | Purpose |
+|---------|---------|
+| `/admin/workflows` | Code-registered workflow catalog metadata, enablement, and role capabilities |
+| `/admin/integrations` | Organization connection credentials, tests, rotation, and workflow requirement bindings |
+| `/admin/workflow-operations` | Temporal diagnostics, worker pollers, schedule counts, and stale projection reconciliation |
+| `/admin/workflow-operations/schedules` | Temporal schedule lifecycle management |
+| `/workflows` | User workflow catalog, start forms, execution list/detail, refresh, and cancel |
+| `/workflow-tasks` | Authenticated human-task inbox and action forms |
+| `/workflow-task-tokens/:token` | Public email-link human-task action forms |
+
+Integration credential encryption is infrastructure config, so it lives in
+`.env` and is read only through `src/config/index.ts`:
+
+| Key | Purpose |
+|-----|---------|
+| `INTEGRATION_CREDENTIAL_KEY_VERSION` | Active encryption key version label stored with encrypted credentials |
+| `INTEGRATION_CREDENTIAL_KEY` | Secret material used to derive the AES-256-GCM credential key |
+| `INTEGRATION_CREDENTIAL_KEY_RING` | Optional JSON object of previous key versions to secret material for decrypting credentials created before rotation |
+
+For production, replace the development placeholder with a long random secret
+and keep old key versions in `INTEGRATION_CREDENTIAL_KEY_RING` until all stored
+credentials have been rotated through `/admin/integrations`. New and rotated
+credentials are written with `INTEGRATION_CREDENTIAL_KEY_VERSION`; existing
+credentials decrypt by the `credentialKeyVersion` stored on the connection.
+The seed creates a development-only `synthetic.echo` connection and binds it to
+`platform.test`, `showcase.customerOnboarding`, `showcase.humanApproval`,
+`showcase.orderFulfillmentSaga`, `showcase.dataSynchronization`,
+`showcase.employeeLifecycle`, `showcase.clientEngagement`,
+`showcase.aiDocumentProcessing`, `showcase.aiSupportAgent`,
+`showcase.complianceReview`, and `showcase.underwritingCapstone` so local smoke
+tests prove the full Activity-side integration path without a paid third-party
+account.
+
+---
+
 ## Technology stack
 
 | Layer | Choice |
@@ -220,6 +328,7 @@ Once setup is complete, open:
 | **Views** | Handlebars (server-rendered templates) |
 | **ORM** | Prisma |
 | **Database** | PostgreSQL |
+| **Workflow runtime** | Temporal TypeScript SDK, self-hosted locally |
 | **Validation** | Zod |
 | **Styles** | Tailwind CSS |
 | **Logging** | Pino |

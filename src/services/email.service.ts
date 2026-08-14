@@ -11,8 +11,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 export interface SendMailOptions {
   to: string;
   subject: string;
-  templateName: "welcome" | "reset-password";
-  context: Record<string, any>;
+  templateName: "welcome" | "reset-password" | "workflow-task";
+  context: Record<string, unknown>;
 }
 
 export class EmailService extends BaseService {
@@ -80,7 +80,7 @@ export class EmailService extends BaseService {
             from,
             subject: options.subject,
             template: options.templateName,
-            context: options.context,
+            context: this.redactContext(options.context),
           },
           "Mock Email Sent (EMAIL_PROVIDER is not set to smtp)"
         );
@@ -97,9 +97,31 @@ export class EmailService extends BaseService {
       this.log.info({ messageId: info.messageId, to: options.to }, "Email sent successfully via SMTP");
       return { messageId: info.messageId };
     } catch (err) {
-      this.log.error({ err, options }, "Failed to send email");
+      this.log.error({ err, options: this.redactOptions(options) }, "Failed to send email");
       throw err;
     }
+  }
+
+  private redactOptions(options: SendMailOptions) {
+    return {
+      to: options.to,
+      subject: options.subject,
+      templateName: options.templateName,
+      context: this.redactContext(options.context),
+    };
+  }
+
+  private redactContext(context: Record<string, unknown>) {
+    return Object.fromEntries(
+      Object.entries(context).map(([key, value]) => [
+        key,
+        this.isSensitiveContextKey(key) ? "[redacted]" : value,
+      ])
+    );
+  }
+
+  private isSensitiveContextKey(key: string) {
+    return /(url|token|secret|password|credential)/i.test(key);
   }
 }
 

@@ -11,6 +11,9 @@ import { sessionAdminController } from "../controllers/admin/session.admin.contr
 import { assetController } from "../controllers/asset.controller.js";
 import { createQueueBoard } from "../controllers/admin/queue.admin.controller.js";
 import { orgAdminRoutes } from "./admin/organization.admin.routes.js";
+import { workflowAdminRoutes } from "./admin/workflow.admin.routes.js";
+import { integrationAdminRoutes } from "./admin/integration.admin.routes.js";
+import { workflowOperationsAdminRoutes } from "./admin/workflow-operations.admin.routes.js";
 import multer from "multer";
 
 const upload = multer({ storage: multer.memoryStorage() });
@@ -64,6 +67,11 @@ adminRoutes.use("/jobs", createQueueBoard());
 
 // Organizations (Multi-Tenancy)
 adminRoutes.use("/organizations", orgAdminRoutes);
+
+// Workflow catalog and policy
+adminRoutes.use("/workflows", requirePermission("workflow", "admin"), workflowAdminRoutes);
+adminRoutes.use("/integrations", requirePermission("integration", "admin"), integrationAdminRoutes);
+adminRoutes.use("/workflow-operations", requirePermission("workflow", "admin"), workflowOperationsAdminRoutes);
 
 adminRoutes.get("/:model", adminController.list.bind(adminController));
 adminRoutes.get("/:model/new", adminController.createForm.bind(adminController));

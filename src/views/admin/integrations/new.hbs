@@ -1,0 +1,65 @@
+<div class="space-y-6">
+  <div>
+    <a href="/admin/integrations?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Back to integrations</a>
+    <h1 class="mt-2 text-2xl font-semibold text-gray-900">New Integration Connection</h1>
+    <p class="mt-1 text-sm text-gray-600">Credentials are stored encrypted. Existing credential values are never displayed.</p>
+  </div>
+
+  {{#if query.error}}
+    <div class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{query.error}}</div>
+  {{/if}}
+
+  <section class="rounded-lg border border-gray-200 bg-white p-5">
+    <div class="mb-5">
+      <p class="text-sm font-medium text-gray-700">Provider</p>
+      <div class="mt-2 flex flex-wrap gap-2">
+        {{#each providers}}
+          <a href="/admin/integrations/new?orgId={{../activeOrg.id}}&providerKey={{key}}" class="rounded-full border px-3 py-1 text-sm {{#if (eq key ../selectedProvider.key)}}border-indigo-600 bg-indigo-50 text-indigo-700{{else}}border-gray-300 text-gray-700{{/if}}">{{label}}</a>
+        {{/each}}
+      </div>
+    </div>
+
+    <form method="POST" action="/admin/integrations" class="grid gap-4">
+      <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+      <input type="hidden" name="providerKey" value="{{selectedProvider.key}}">
+
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Connection Name</span>
+        <input name="name" class="rounded-md border border-gray-300 px-3 py-2 text-sm" required>
+      </label>
+
+      <div class="rounded-md border border-gray-200 p-4">
+        <h2 class="text-sm font-semibold text-gray-900">Non-secret Configuration</h2>
+        <div class="mt-3 grid gap-3">
+          {{#each selectedProvider.configForm.fields}}
+            <label class="grid gap-1">
+              <span class="text-sm font-medium text-gray-700">{{label}}{{#if required}} <span class="text-red-600">*</span>{{/if}}</span>
+              <input name="config[{{key}}]" type="{{type}}" value="{{defaultValue}}" placeholder="{{placeholder}}" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+              {{#if helpText}}<span class="text-xs text-gray-500">{{helpText}}</span>{{/if}}
+            </label>
+          {{else}}
+            <p class="text-sm text-gray-500">This provider has no non-secret configuration.</p>
+          {{/each}}
+        </div>
+      </div>
+
+      <div class="rounded-md border border-amber-200 bg-amber-50 p-4">
+        <h2 class="text-sm font-semibold text-amber-950">Credentials</h2>
+        <p class="mt-1 text-xs text-amber-800">These values are accepted once, encrypted, and never rendered back.</p>
+        <div class="mt-3 grid gap-3">
+          {{#each selectedProvider.credentialForm.fields}}
+            <label class="grid gap-1">
+              <span class="text-sm font-medium text-gray-700">{{label}}{{#if required}} <span class="text-red-600">*</span>{{/if}}</span>
+              <input name="credentials[{{key}}]" type="password" placeholder="{{placeholder}}" class="rounded-md border border-gray-300 px-3 py-2 text-sm" {{#if required}}required{{/if}}>
+              {{#if helpText}}<span class="text-xs text-gray-500">{{helpText}}</span>{{/if}}
+            </label>
+          {{/each}}
+        </div>
+      </div>
+
+      <div>
+        <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Create Connection</button>
+      </div>
+    </form>
+  </section>
+</div>

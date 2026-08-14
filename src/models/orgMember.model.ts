@@ -12,8 +12,9 @@ export class OrgMemberModel extends BaseModel {
 
   findByUser(userId: string) {
     return this.db.orgMember.findMany({
-      where: { userId, deletedAt: null },
+      where: { userId, deletedAt: null, org: { deletedAt: null } },
       include: { org: true },
+      orderBy: { joinedAt: "asc" },
     });
   }
 

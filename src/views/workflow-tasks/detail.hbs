@@ -1,0 +1,34 @@
+<main class="mx-auto max-w-3xl px-4 py-10">
+  <div class="mb-8">
+    <a href="/workflow-tasks?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Back to task inbox</a>
+    <h1 class="mt-2 text-3xl font-semibold text-gray-900">{{task.title}}</h1>
+    {{#if task.description}}<p class="mt-2 whitespace-pre-wrap text-sm text-gray-600">{{task.description}}</p>{{/if}}
+    <p class="mt-2 text-xs text-gray-500">{{task.workflowExecution.workflowDefinition.name}} · {{activeOrg.name}}</p>
+  </div>
+
+  {{#if query.error}}
+    <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{query.error}}</div>
+  {{/if}}
+  {{#if query.submitted}}
+    <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Task response submitted.</div>
+  {{/if}}
+
+  <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+    <div class="flex items-center justify-between gap-4">
+      <h2 class="text-lg font-semibold text-gray-900">{{action.label}}</h2>
+      <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{{task.status}}</span>
+    </div>
+
+    {{#if (eq task.status "OPEN")}}
+      {{> workflows/human-task-form
+        action=action
+        actionUrl=(concat "/workflow-tasks/" task.id "/actions/" action.key)
+        csrfToken=csrfToken
+        idempotencyKey=idempotencyKey
+        activeOrg=activeOrg
+      }}
+    {{else}}
+      <p class="mt-4 text-sm text-gray-600">This task is closed.</p>
+    {{/if}}
+  </section>
+</main>

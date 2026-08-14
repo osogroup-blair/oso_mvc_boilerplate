@@ -53,6 +53,7 @@ describe("AuthService", () => {
     vi.clearAllMocks();
     userModel = makeUserModel();
     service = new AuthService(userModel as any);
+    vi.spyOn(service.log, "info");
   });
 
   it("hashes password and verifies successfully", () => {
@@ -117,6 +118,7 @@ describe("AuthService", () => {
     expect(result.user.id).toBe("u-new");
     expect(result).toHaveProperty("verificationToken");
     expect(prisma.emailVerificationToken.create).toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(service.log.info).mock.calls)).not.toContain(result.verificationToken);
   });
 
   it("requests password reset for existing active user", async () => {
@@ -131,6 +133,7 @@ describe("AuthService", () => {
 
     expect(result).toHaveProperty("resetToken");
     expect(prisma.passwordResetToken.create).toHaveBeenCalled();
+    expect(JSON.stringify(vi.mocked(service.log.info).mock.calls)).not.toContain(result.resetToken);
   });
 
   it("resets password successfully given valid token", async () => {

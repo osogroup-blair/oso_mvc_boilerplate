@@ -1,0 +1,9 @@
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:24px;">
+  <h1 style="color:{{accentColor}};margin-bottom:12px;">Workflow task awaiting your response</h1>
+  <p>A workflow task needs a response. Use the button below to open the secure task form.</p>
+  <p style="margin:24px 0;">
+    <a href="{{taskUrl}}" style="background:{{accentColor}};color:white;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:600;">Open task</a>
+  </p>
+  <p style="font-size:12px;color:#6b7280;">This link expires at {{expiresAt}}. Do not forward it.</p>
+  {{#if footerText}}<p style="font-size:12px;color:#6b7280;margin-top:24px;">{{footerText}}</p>{{/if}}
+</div>

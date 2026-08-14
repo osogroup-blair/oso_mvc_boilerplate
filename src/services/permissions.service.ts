@@ -47,6 +47,14 @@ export const DEFINED_PERMISSIONS: PermissionDef[] = [
   { resource: "admin", action: "access", label: "Admin Access",   description: "Access the admin area at all" },
   { resource: "admin", action: "logs",   label: "View Logs",      description: "View audit logs and diagnostics" },
   { resource: "admin", action: "settings", label: "Site Settings", description: "Edit global site settings" },
+  // Workflows
+  { resource: "workflow", action: "read", label: "View Workflows", description: "View enabled workflow catalog entries" },
+  { resource: "workflow", action: "start", label: "Start Workflows", description: "Start permitted workflows" },
+  { resource: "workflow", action: "act", label: "Act on Workflows", description: "Submit permitted workflow actions" },
+  { resource: "workflow", action: "cancel", label: "Cancel Workflows", description: "Cancel permitted workflow executions" },
+  { resource: "workflow", action: "admin", label: "Admin Workflows", description: "Configure workflow definitions and role policy" },
+  // Integrations
+  { resource: "integration", action: "admin", label: "Admin Integrations", description: "Manage organization integration connections and workflow bindings" },
 ] as const;
 
 // Helper: format a resource+action into a canonical permission key.

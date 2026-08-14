@@ -1,57 +1,57 @@
 // Seed realistic dev data. Idempotent via upsert.
 import { PrismaClient } from "@prisma/client";
 import { authService } from "../src/services/auth.service.js";
+import { credentialEncryptionService } from "../src/services/credential-encryption.service.js";
 
 const prisma = new PrismaClient();
 
 async function main() {
+  const adminPermissions = [
+    "page:read", "page:create", "page:update", "page:delete",
+    "user:read", "user:create", "user:update", "user:delete",
+    "role:read", "role:update",
+    "route:read", "route:create", "route:update", "route:delete",
+    "navigationItem:read", "navigationItem:create", "navigationItem:update", "navigationItem:delete",
+    "admin:access", "admin:logs", "admin:settings",
+    "workflow:read", "workflow:start", "workflow:act", "workflow:cancel", "workflow:admin",
+    "integration:admin",
+  ];
+  const editorPermissions = ["page:read", "page:create", "page:update", "admin:access", "workflow:read"];
+  const userPermissions = ["page:read", "workflow:read"];
+
   const adminRole = await prisma.role.upsert({
     where: { name: "ADMIN" },
     update: {
-      permissions: [
-        "page:read", "page:create", "page:update", "page:delete",
-        "user:read", "user:create", "user:update", "user:delete",
-        "role:read", "role:update",
-        "route:read", "route:create", "route:update", "route:delete",
-        "navigationItem:read", "navigationItem:create", "navigationItem:update", "navigationItem:delete",
-        "admin:access", "admin:logs", "admin:settings",
-      ],
+      permissions: adminPermissions,
     },
     create: {
       name: "ADMIN",
       description: "Super Administrator with full permissions",
-      permissions: [
-        "page:read", "page:create", "page:update", "page:delete",
-        "user:read", "user:create", "user:update", "user:delete",
-        "role:read", "role:update",
-        "route:read", "route:create", "route:update", "route:delete",
-        "navigationItem:read", "navigationItem:create", "navigationItem:update", "navigationItem:delete",
-        "admin:access", "admin:logs", "admin:settings",
-      ],
+      permissions: adminPermissions,
     },
   });
 
   const editorRole = await prisma.role.upsert({
     where: { name: "EDITOR" },
     update: {
-      permissions: ["page:read", "page:create", "page:update", "admin:access"],
+      permissions: editorPermissions,
     },
     create: {
       name: "EDITOR",
       description: "Editor who can create and update content",
-      permissions: ["page:read", "page:create", "page:update", "admin:access"],
+      permissions: editorPermissions,
     },
   });
 
   const userRole = await prisma.role.upsert({
     where: { name: "USER" },
     update: {
-      permissions: ["page:read"],
+      permissions: userPermissions,
     },
     create: {
       name: "USER",
       description: "Standard user with read-only access",
-      permissions: ["page:read"],
+      permissions: userPermissions,
     },
   });
 
@@ -87,6 +87,571 @@ async function main() {
       tags: ["writer"],
     },
   });
+
+  const defaultOrg = await prisma.organization.upsert({
+    where: { slug: "acme-demo" },
+    update: { deletedAt: null },
+    create: {
+      id: "seed-org-acme",
+      name: "Acme Demo",
+      slug: "acme-demo",
+    },
+  });
+
+  await prisma.orgMember.upsert({
+    where: { orgId_userId: { orgId: defaultOrg.id, userId: alice.id } },
+    update: { role: "OWNER", deletedAt: null },
+    create: { orgId: defaultOrg.id, userId: alice.id, role: "OWNER" },
+  });
+
+  await prisma.orgMember.upsert({
+    where: { orgId_userId: { orgId: defaultOrg.id, userId: bob.id } },
+    update: { role: "ADMIN", deletedAt: null },
+    create: { orgId: defaultOrg.id, userId: bob.id, role: "ADMIN" },
+  });
+
+  const heartbeatDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "platform.heartbeat" },
+    update: {
+      slug: "platform-heartbeat",
+      workflowType: "temporalPlatformHeartbeatWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Heartbeat",
+      description: "Internal workflow registration used to verify the Temporal platform catalog.",
+      category: "System",
+      icon: "activity",
+      deletedAt: null,
+    },
+    create: {
+      key: "platform.heartbeat",
+      slug: "platform-heartbeat",
+      workflowType: "temporalPlatformHeartbeatWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Heartbeat",
+      description: "Internal workflow registration used to verify the Temporal platform catalog.",
+      category: "System",
+      icon: "activity",
+    },
+  });
+
+  const platformTestDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "platform.test" },
+    update: {
+      slug: "platform-test",
+      workflowType: "platformTestWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Test Workflow",
+      description: "Internal long-running workflow used to validate generic execution, query, and cancel paths.",
+      category: "System",
+      icon: "activity",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "platform.test",
+      slug: "platform-test",
+      workflowType: "platformTestWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Test Workflow",
+      description: "Internal long-running workflow used to validate generic execution, query, and cancel paths.",
+      category: "System",
+      icon: "activity",
+      isEnabled: true,
+    },
+  });
+
+  const platformApprovalDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "platform.approval" },
+    update: {
+      slug: "platform-approval",
+      workflowType: "platformApprovalWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Approval Workflow",
+      description: "Internal workflow used to validate durable human tasks, email links, and generic action submission.",
+      category: "System",
+      icon: "check-circle",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "platform.approval",
+      slug: "platform-approval",
+      workflowType: "platformApprovalWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Platform Approval Workflow",
+      description: "Internal workflow used to validate durable human tasks, email links, and generic action submission.",
+      category: "System",
+      icon: "check-circle",
+      isEnabled: true,
+    },
+  });
+
+  const customerOnboardingDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.customerOnboarding" },
+    update: {
+      slug: "showcase-customer-onboarding",
+      workflowType: "customerOnboardingWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Customer Onboarding",
+      description: "Migrated showcase workflow for customer workspace, user, integration, validation, approval, and activation orchestration.",
+      category: "Showcase",
+      icon: "building",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.customerOnboarding",
+      slug: "showcase-customer-onboarding",
+      workflowType: "customerOnboardingWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Customer Onboarding",
+      description: "Migrated showcase workflow for customer workspace, user, integration, validation, approval, and activation orchestration.",
+      category: "Showcase",
+      icon: "building",
+      isEnabled: true,
+    },
+  });
+
+  const humanApprovalDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.humanApproval" },
+    update: {
+      slug: "showcase-human-approval",
+      workflowType: "humanApprovalWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Human Approval",
+      description: "Migrated showcase workflow for automatic approval, manager review, request changes, resubmission, and escalation.",
+      category: "Showcase",
+      icon: "check-circle",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.humanApproval",
+      slug: "showcase-human-approval",
+      workflowType: "humanApprovalWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Human Approval",
+      description: "Migrated showcase workflow for automatic approval, manager review, request changes, resubmission, and escalation.",
+      category: "Showcase",
+      icon: "check-circle",
+      isEnabled: true,
+    },
+  });
+
+  const orderFulfillmentDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.orderFulfillmentSaga" },
+    update: {
+      slug: "showcase-order-fulfillment-saga",
+      workflowType: "orderFulfillmentSagaWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Order Fulfillment Saga",
+      description: "Migrated showcase workflow for retry-safe external side effects, reverse compensation, payment, inventory, shipment, and confirmation orchestration.",
+      category: "Showcase",
+      icon: "shopping-cart",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.orderFulfillmentSaga",
+      slug: "showcase-order-fulfillment-saga",
+      workflowType: "orderFulfillmentSagaWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Order Fulfillment Saga",
+      description: "Migrated showcase workflow for retry-safe external side effects, reverse compensation, payment, inventory, shipment, and confirmation orchestration.",
+      category: "Showcase",
+      icon: "shopping-cart",
+      isEnabled: true,
+    },
+  });
+
+  const dataSynchronizationDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.dataSynchronization" },
+    update: {
+      slug: "showcase-data-synchronization",
+      workflowType: "dataSynchronizationWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Data Synchronization",
+      description: "Migrated showcase workflow for source fetch, canonical transform, parallel CRM/ERP/Billing sync, validation, and targeted reconciliation.",
+      category: "Showcase",
+      icon: "refresh-cw",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.dataSynchronization",
+      slug: "showcase-data-synchronization",
+      workflowType: "dataSynchronizationWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Data Synchronization",
+      description: "Migrated showcase workflow for source fetch, canonical transform, parallel CRM/ERP/Billing sync, validation, and targeted reconciliation.",
+      category: "Showcase",
+      icon: "refresh-cw",
+      isEnabled: true,
+    },
+  });
+
+  const employeeLifecycleDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.employeeLifecycle" },
+    update: {
+      slug: "showcase-employee-lifecycle",
+      workflowType: "employeeLifecycleWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Employee Lifecycle",
+      description: "Migrated showcase workflow for scheduled onboarding, identity creation, access provisioning, manager checklist input, post-start review, verification, and cancellation cleanup.",
+      category: "Showcase",
+      icon: "user-plus",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.employeeLifecycle",
+      slug: "showcase-employee-lifecycle",
+      workflowType: "employeeLifecycleWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Employee Lifecycle",
+      description: "Migrated showcase workflow for scheduled onboarding, identity creation, access provisioning, manager checklist input, post-start review, verification, and cancellation cleanup.",
+      category: "Showcase",
+      icon: "user-plus",
+      isEnabled: true,
+    },
+  });
+
+  const clientEngagementDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.clientEngagement" },
+    update: {
+      slug: "showcase-client-engagement",
+      workflowType: "clientEngagementWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Client Engagement",
+      description: "Migrated showcase workflow for phased delivery, child workstreams, client approval, go-live, post-launch review, and blocker tracking.",
+      category: "Showcase",
+      icon: "briefcase",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.clientEngagement",
+      slug: "showcase-client-engagement",
+      workflowType: "clientEngagementWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Client Engagement",
+      description: "Migrated showcase workflow for phased delivery, child workstreams, client approval, go-live, post-launch review, and blocker tracking.",
+      category: "Showcase",
+      icon: "briefcase",
+      isEnabled: true,
+    },
+  });
+
+  const aiDocumentProcessingDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.aiDocumentProcessing" },
+    update: {
+      slug: "showcase-ai-document-processing",
+      workflowType: "aiDocumentProcessingWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "AI Document Processing",
+      description: "Migrated showcase workflow for document-reference parsing, AI classification/extraction, enrichment, confidence gates, human correction, and result storage.",
+      category: "Showcase",
+      icon: "file-search",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.aiDocumentProcessing",
+      slug: "showcase-ai-document-processing",
+      workflowType: "aiDocumentProcessingWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "AI Document Processing",
+      description: "Migrated showcase workflow for document-reference parsing, AI classification/extraction, enrichment, confidence gates, human correction, and result storage.",
+      category: "Showcase",
+      icon: "file-search",
+      isEnabled: true,
+    },
+  });
+
+  const aiSupportAgentDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.aiSupportAgent" },
+    update: {
+      slug: "showcase-ai-support-agent",
+      workflowType: "aiSupportAgentWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "AI Support Agent",
+      description: "Migrated showcase workflow for AI-assisted case triage, context retrieval, approval-gated tool execution, outcome validation, and customer response.",
+      category: "Showcase",
+      icon: "bot",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.aiSupportAgent",
+      slug: "showcase-ai-support-agent",
+      workflowType: "aiSupportAgentWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "AI Support Agent",
+      description: "Migrated showcase workflow for AI-assisted case triage, context retrieval, approval-gated tool execution, outcome validation, and customer response.",
+      category: "Showcase",
+      icon: "bot",
+      isEnabled: true,
+    },
+  });
+
+  const complianceReviewDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.complianceReview" },
+    update: {
+      slug: "showcase-compliance-review",
+      workflowType: "complianceReviewWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Compliance Review",
+      description: "Migrated showcase workflow for schedule-compatible compliance reviews, automated checks, evidence tasks, reminders, escalations, and final report generation.",
+      category: "Showcase",
+      icon: "clipboard-check",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.complianceReview",
+      slug: "showcase-compliance-review",
+      workflowType: "complianceReviewWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Compliance Review",
+      description: "Migrated showcase workflow for schedule-compatible compliance reviews, automated checks, evidence tasks, reminders, escalations, and final report generation.",
+      category: "Showcase",
+      icon: "clipboard-check",
+      isEnabled: true,
+    },
+  });
+
+  const underwritingCapstoneDefinition = await prisma.workflowDefinition.upsert({
+    where: { key: "showcase.underwritingCapstone" },
+    update: {
+      slug: "showcase-underwriting-capstone",
+      workflowType: "underwritingCapstoneWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Underwriting Capstone",
+      description: "Migrated showcase workflow for parent-child risk checks, missing-information loops, analyst decisions, cancellation cleanup, and decision history.",
+      category: "Showcase",
+      icon: "scale",
+      isEnabled: true,
+      deletedAt: null,
+    },
+    create: {
+      key: "showcase.underwritingCapstone",
+      slug: "showcase-underwriting-capstone",
+      workflowType: "underwritingCapstoneWorkflow",
+      contractVersion: 1,
+      defaultTaskQueue: "oso-workflows",
+      name: "Underwriting Capstone",
+      description: "Migrated showcase workflow for parent-child risk checks, missing-information loops, analyst decisions, cancellation cleanup, and decision history.",
+      category: "Showcase",
+      icon: "scale",
+      isEnabled: true,
+    },
+  });
+
+  const syntheticRequirementDefinitions = [
+    platformTestDefinition,
+    customerOnboardingDefinition,
+    humanApprovalDefinition,
+    orderFulfillmentDefinition,
+    dataSynchronizationDefinition,
+    employeeLifecycleDefinition,
+    clientEngagementDefinition,
+    aiDocumentProcessingDefinition,
+    aiSupportAgentDefinition,
+    complianceReviewDefinition,
+    underwritingCapstoneDefinition,
+  ];
+
+  for (const definition of syntheticRequirementDefinitions) {
+    const label = definition.key === "platform.test"
+      ? "Synthetic Echo Connection"
+      : definition.key === "showcase.customerOnboarding"
+        ? "Synthetic Provisioning Connection"
+        : definition.key === "showcase.humanApproval"
+          ? "Synthetic Approval Operations Connection"
+          : definition.key === "showcase.orderFulfillmentSaga"
+            ? "Synthetic Fulfillment Connection"
+            : definition.key === "showcase.dataSynchronization"
+              ? "Synthetic Data Sync Connection"
+              : definition.key === "showcase.employeeLifecycle"
+                ? "Synthetic Employee Provisioning Connection"
+                : definition.key === "showcase.clientEngagement"
+                  ? "Synthetic Engagement Delivery Connection"
+                  : definition.key === "showcase.aiDocumentProcessing"
+                    ? "Synthetic AI Document Connection"
+                    : definition.key === "showcase.aiSupportAgent"
+                      ? "Synthetic AI Support Agent Connection"
+                      : definition.key === "showcase.complianceReview"
+                        ? "Synthetic Compliance Operations Connection"
+                        : "Synthetic Underwriting Decisioning Connection";
+    const description = definition.key === "platform.test"
+      ? "Development-only connection used to prove encrypted Activity-side integration resolution."
+      : definition.key === "showcase.customerOnboarding"
+        ? "Development-only adapter used for customer workspace, user, integration, validation, and activation steps."
+        : definition.key === "showcase.humanApproval"
+          ? "Development-only adapter used for approval checks, escalation, notification, and decision recording."
+          : definition.key === "showcase.orderFulfillmentSaga"
+            ? "Development-only adapter used for order, inventory, payment, shipment, confirmation, and compensation side effects."
+            : definition.key === "showcase.dataSynchronization"
+              ? "Development-only adapter used for source fetch, target sync, validation, and reconciliation side effects."
+              : definition.key === "showcase.employeeLifecycle"
+                ? "Development-only adapter used for identity, access provisioning, verification, and deprovisioning side effects."
+                : definition.key === "showcase.clientEngagement"
+                  ? "Development-only adapter used for phased delivery, child workstreams, status summaries, go-live, and review side effects."
+                  : definition.key === "showcase.aiDocumentProcessing"
+                    ? "Development-only adapter used for document-reference parsing, classification, extraction, enrichment, validation, and storage side effects."
+                    : definition.key === "showcase.aiSupportAgent"
+                      ? "Development-only adapter used for safe-message understanding, context lookup, proposal generation, approval-gated tool execution, validation, and response side effects."
+                      : definition.key === "showcase.complianceReview"
+                        ? "Development-only adapter used for compliance evidence collection, automated checks, reminders, escalations, and report generation side effects."
+                        : "Development-only adapter used for underwriting data gathering, child risk checks, notifications, decision recording, and cancellation cleanup side effects.";
+
+    await prisma.workflowIntegrationRequirement.upsert({
+      where: {
+        workflowDefinitionId_key: {
+          workflowDefinitionId: definition.id,
+          key: "syntheticEcho",
+        },
+      },
+      update: {
+        providerKey: "synthetic.echo",
+        capabilityKey: "echo",
+        label,
+        description,
+        isRequired: true,
+        deletedAt: null,
+      },
+      create: {
+        workflowDefinitionId: definition.id,
+        key: "syntheticEcho",
+        providerKey: "synthetic.echo",
+        capabilityKey: "echo",
+        label,
+        description,
+        isRequired: true,
+      },
+    });
+  }
+
+  const syntheticCredentials = credentialEncryptionService.encrypt({ apiToken: "seed-synthetic-token" });
+  const syntheticConnection = await prisma.integrationConnection.upsert({
+    where: {
+      orgId_name: {
+        orgId: defaultOrg.id,
+        name: "Seed Synthetic Echo",
+      },
+    },
+    update: {
+      providerKey: "synthetic.echo",
+      status: "ACTIVE",
+      config: { endpointLabel: "Seed local synthetic endpoint" },
+      ...syntheticCredentials,
+      deletedAt: null,
+      disabledAt: null,
+      lastTestStatus: "SUCCEEDED",
+      lastTestMessage: "Seeded synthetic connection",
+      lastTestedAt: new Date(),
+    },
+    create: {
+      orgId: defaultOrg.id,
+      name: "Seed Synthetic Echo",
+      providerKey: "synthetic.echo",
+      status: "ACTIVE",
+      config: { endpointLabel: "Seed local synthetic endpoint" },
+      ...syntheticCredentials,
+      lastTestStatus: "SUCCEEDED",
+      lastTestMessage: "Seeded synthetic connection",
+      lastTestedAt: new Date(),
+    },
+  });
+
+  for (const definition of syntheticRequirementDefinitions) {
+    await prisma.workflowIntegrationBinding.upsert({
+      where: {
+        orgId_workflowDefinitionId_requirementKey: {
+          orgId: defaultOrg.id,
+          workflowDefinitionId: definition.id,
+          requirementKey: "syntheticEcho",
+        },
+      },
+      update: {
+        connectionId: syntheticConnection.id,
+        isEnabled: true,
+        deletedAt: null,
+        lastValidationStatus: "SUCCEEDED",
+        lastValidationMessage: "Seeded binding",
+        lastValidatedAt: new Date(),
+      },
+      create: {
+        orgId: defaultOrg.id,
+        workflowDefinitionId: definition.id,
+        requirementKey: "syntheticEcho",
+        connectionId: syntheticConnection.id,
+        isEnabled: true,
+        lastValidationStatus: "SUCCEEDED",
+        lastValidationMessage: "Seeded binding",
+        lastValidatedAt: new Date(),
+      },
+    });
+  }
+
+  for (const capability of ["START", "VIEW", "ACT", "CANCEL", "ADMIN"] as const) {
+    for (const definition of [
+      heartbeatDefinition,
+      platformTestDefinition,
+      platformApprovalDefinition,
+      customerOnboardingDefinition,
+      humanApprovalDefinition,
+      orderFulfillmentDefinition,
+      dataSynchronizationDefinition,
+      employeeLifecycleDefinition,
+      clientEngagementDefinition,
+      aiDocumentProcessingDefinition,
+      aiSupportAgentDefinition,
+      complianceReviewDefinition,
+      underwritingCapstoneDefinition,
+    ]) {
+      await prisma.workflowDefinitionRole.upsert({
+        where: {
+          workflowDefinitionId_roleId_capability: {
+            workflowDefinitionId: definition.id,
+            roleId: adminRole.id,
+            capability,
+          },
+        },
+        update: { deletedAt: null },
+        create: {
+          workflowDefinitionId: definition.id,
+          roleId: adminRole.id,
+          capability,
+        },
+      });
+    }
+  }
 
   await prisma.post.upsert({
     where: { id: "seed-post-1" },
@@ -330,6 +895,28 @@ async function main() {
     },
   });
 
+  await prisma.navigationItem.upsert({
+    where: { id: "seed-nav-workflows" },
+    update: {},
+    create: {
+      id: "seed-nav-workflows",
+      label: "Workflows",
+      url: "/workflows",
+      order: 20,
+    },
+  });
+
+  await prisma.navigationItem.upsert({
+    where: { id: "seed-nav-workflow-tasks" },
+    update: {},
+    create: {
+      id: "seed-nav-workflow-tasks",
+      label: "Workflow Tasks",
+      url: "/workflow-tasks",
+      order: 30,
+    },
+  });
+
   // Global settings
   const defaultSettings = [
     { key: "HOME_PAGE_SLUG", value: "welcome" },
@@ -356,7 +943,7 @@ async function main() {
     });
   }
 
-  console.log("✓ Seeded users, posts, a CMS page, 3 projects, 9 tasks, 5 tags, and nav link");
+  console.log("✓ Seeded users, organizations, workflow catalog/tasks, integrations, posts, a CMS page, 3 projects, 9 tasks, 5 tags, and nav links");
 }
 
 main()

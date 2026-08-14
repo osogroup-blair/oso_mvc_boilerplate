@@ -15,6 +15,7 @@ const BLOCK_PARTIALS = new Set([
 export function registerViewHelpers(hbs: typeof Handlebars) {
   // Equality helper for template conditionals: {{#if (eq level 2)}}
   hbs.registerHelper("eq", (a: unknown, b: unknown) => a === b);
+  hbs.registerHelper("concat", (...args: unknown[]) => args.slice(0, -1).map((part) => String(part ?? "")).join(""));
 
   // Active-link helper for the admin sidebar.
   // Returns true when currentPath starts with href.

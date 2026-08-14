@@ -1,0 +1,35 @@
+<form method="POST" action="{{actionUrl}}" class="mt-5 grid gap-4">
+  <input type="hidden" name="_csrf" value="{{csrfToken}}">
+  <input type="hidden" name="idempotencyKey" value="{{idempotencyKey}}">
+  {{#if activeOrg}}
+    <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+  {{/if}}
+
+  {{#each action.inputForm.fields}}
+    <label class="grid gap-1">
+      <span class="text-sm font-medium text-gray-700">{{label}}{{#if required}} <span class="text-red-600">*</span>{{/if}}</span>
+      {{#if (eq type "textarea")}}
+        <textarea name="{{key}}" rows="4" placeholder="{{placeholder}}" class="rounded-md border border-gray-300 px-3 py-2 text-sm">{{defaultValue}}</textarea>
+      {{else}}
+        {{#if (eq type "select")}}
+          <select name="{{key}}" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+            {{#each options}}
+              <option value="{{value}}">{{label}}</option>
+            {{/each}}
+          </select>
+        {{else}}
+          {{#if (eq type "boolean")}}
+            <input type="checkbox" name="{{key}}" value="true" class="h-4 w-4 rounded border-gray-300">
+          {{else}}
+            <input name="{{key}}" type="{{#if (eq type "number")}}number{{else}}{{type}}{{/if}}" value="{{defaultValue}}" placeholder="{{placeholder}}" class="rounded-md border border-gray-300 px-3 py-2 text-sm">
+          {{/if}}
+        {{/if}}
+      {{/if}}
+      {{#if helpText}}<span class="text-xs text-gray-500">{{helpText}}</span>{{/if}}
+    </label>
+  {{/each}}
+
+  <div class="pt-2">
+    <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">{{action.label}}</button>
+  </div>
+</form>

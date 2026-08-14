@@ -9,6 +9,7 @@ import { PasswordResetTokenModel, passwordResetTokenModel } from "../models/pass
 import { EmailVerificationTokenModel, emailVerificationTokenModel } from "../models/emailVerificationToken.model.js";
 import { auditService, AuditService } from "./audit.service.js";
 import { emailService, type SendMailOptions } from "./email.service.js";
+import { settingService } from "./setting.service.js";
 import { emailQueue, isRedisAvailable } from "../lib/queue.js";
 
 export class AuthService extends BaseService {
@@ -18,7 +19,8 @@ export class AuthService extends BaseService {
     private readonly roles: RoleModel = roleModel,
     private readonly sessions: SessionModel = sessionModel,
     private readonly passwordResetTokens: PasswordResetTokenModel = passwordResetTokenModel,
-    private readonly emailVerificationTokens: EmailVerificationTokenModel = emailVerificationTokenModel
+    private readonly emailVerificationTokens: EmailVerificationTokenModel = emailVerificationTokenModel,
+    private readonly settings: typeof settingService = settingService
   ) {
     super("AuthService");
   }
@@ -36,6 +38,11 @@ export class AuthService extends BaseService {
   // Hash session / reset token for secure DB storage.
   private hash(input: string): string {
     return createHash("sha256").update(input + config.JWT_SECRET).digest("hex");
+  }
+
+  private async publicAppUrl() {
+    const publicAppUrl = await this.settings.get("PUBLIC_APP_URL", "http://localhost:3000");
+    return (publicAppUrl ?? "http://localhost:3000").replace(/\/+$/, "");
   }
 
   hashPassword(password: string): string {
@@ -89,7 +96,9 @@ export class AuthService extends BaseService {
       expiresAt,
     });
 
-    this.log.info({ userId: user.id, verificationToken: rawVerificationToken }, "User registered; email verification token created");
+    this.log.info({ userId: user.id }, "User registered; email verification token created");
+
+    const publicAppUrl = await this.publicAppUrl();
 
     this.enqueueOrSend({
       to: user.email,
@@ -97,13 +106,16 @@ export class AuthService extends BaseService {
       templateName: "welcome",
       context: {
         name: user.name,
-        verificationUrl: `${config.isProd ? "https://yourdomain.com" : "http://localhost:3000"}/auth/verify-email/${rawVerificationToken}`,
+        verificationUrl: `${publicAppUrl}/auth/verify-email/${rawVerificationToken}`,
       },
     }).catch((err) => {
       this.log.error({ err, userId: user.id }, "Failed to send registration welcome email");
     });
 
-    return { user, verificationToken: rawVerificationToken };
+    return {
+      user,
+      verificationToken: config.isProd ? undefined : rawVerificationToken,
+    };
   }
 
   async login(email: string, password: string) {
@@ -189,7 +201,9 @@ export class AuthService extends BaseService {
       entityId: user.id,
     });
 
-    this.log.info({ userId: user.id, resetToken: rawToken }, "Password reset token generated");
+    this.log.info({ userId: user.id }, "Password reset token generated");
+
+    const publicAppUrl = await this.publicAppUrl();
 
     this.enqueueOrSend({
       to: user.email,
@@ -197,7 +211,7 @@ export class AuthService extends BaseService {
       templateName: "reset-password",
       context: {
         name: user.name,
-        resetUrl: `${config.isProd ? "https://yourdomain.com" : "http://localhost:3000"}/auth/reset-password/${rawToken}`,
+        resetUrl: `${publicAppUrl}/auth/reset-password/${rawToken}`,
       },
     }).catch((err) => {
       this.log.error({ err, userId: user.id }, "Failed to send password reset email");
@@ -205,7 +219,7 @@ export class AuthService extends BaseService {
 
     return {
       message: "If an active account exists with that email, password reset instructions have been generated.",
-      resetToken: rawToken,
+      resetToken: config.isProd ? undefined : rawToken,
     };
   }
 

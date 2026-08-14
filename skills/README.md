@@ -20,6 +20,7 @@ skill; before *anything*, read `SKILL-conventions.md`.
 | Adding a REST endpoint | `SKILL-controller.md` + `SKILL-route.md` |
 | Adding an admin CRUD page | `SKILL-admin.md` |
 | Building a server-rendered view / CMS block | `SKILL-views.md` |
+| Adding or changing Temporal client, Worker, Workflow, Activity, workflow execution, human task, integration, schedule, operations behavior, or migrated standalone/showcase workflow behavior | `SKILL-temporal.md` |
 | Writing or running tests | `SKILL-testing.md` |
 
 ## The layered flow (never skip a layer)
@@ -27,12 +28,17 @@ skill; before *anything*, read `SKILL-conventions.md`.
 Route → Controller → Service → Model → Prisma → PostgreSQL
                         ↓
               (permissions · audit · cache · storage)
+
+Temporal Worker → Workflow → Activity → Service → Model → Prisma
 ```
 - Route: URL → controller. No logic.
 - Controller: validate + call one service + shape response. No DB.
 - Service: business logic. Calls models + cross-cutting services. No Prisma, no req/res.
 - Model: Prisma queries only. Soft-delete aware. No logic.
 - View: renders a payload. Never fetches.
+- Migrated Temporal workflows: register generic start/action forms and
+  integration requirements first; use `/workflows` and `/workflow-tasks` unless
+  the generic renderer genuinely cannot express the interaction.
 
 Dependency direction is a hard rule — see `SKILL-conventions.md` for the table.
 

@@ -1,0 +1,62 @@
+<main class="mx-auto max-w-5xl px-4 py-10">
+  <div class="mb-8">
+    <h1 class="text-3xl font-semibold text-gray-900">Workflows</h1>
+    <p class="mt-2 text-sm text-gray-600">Available workflow orchestrations for your active organization.</p>
+    {{#if activeOrg}}
+      <div class="mt-3 flex flex-wrap gap-3">
+        <a href="/workflows/executions?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">View executions</a>
+        <a href="/workflow-tasks?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Task inbox</a>
+      </div>
+    {{/if}}
+  </div>
+
+  {{#if memberships.length}}
+    <form method="GET" action="/workflows" class="mb-6 flex flex-wrap items-end gap-3">
+      <label class="grid gap-1">
+        <span class="text-sm font-medium text-gray-700">Organization</span>
+        <select name="orgId" class="min-w-64 rounded-md border border-gray-300 px-3 py-2 text-sm">
+          {{#each memberships}}
+            <option value="{{org.id}}" {{#if (eq org.id ../selectedOrgId)}}selected{{/if}}>{{org.name}}</option>
+          {{/each}}
+        </select>
+      </label>
+      <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">View Catalog</button>
+    </form>
+  {{/if}}
+
+  {{#if needsSelection}}
+    <div class="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+      Select an organization to view its workflow catalog.
+    </div>
+  {{else}}
+    {{#if activeOrg}}
+      <div class="mb-4 text-sm text-gray-600">Active organization: <span class="font-medium text-gray-900">{{activeOrg.name}}</span></div>
+      <div class="grid gap-4 md:grid-cols-2">
+        {{#each workflows}}
+          <article class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+            <div class="flex items-start justify-between gap-3">
+              <div>
+                <div class="text-xs font-semibold uppercase tracking-wide text-indigo-600">{{category}}</div>
+                <h2 class="mt-1 text-lg font-semibold text-gray-900">{{name}}</h2>
+              </div>
+              <span class="rounded-full bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700">v{{contractVersion}}</span>
+            </div>
+            {{#if description}}<p class="mt-3 text-sm text-gray-600">{{description}}</p>{{/if}}
+            <div class="mt-4 font-mono text-xs text-gray-500">{{key}}</div>
+            <div class="mt-5">
+              <a href="/workflows/{{slug}}?orgId={{../activeOrg.id}}" class="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Open</a>
+            </div>
+          </article>
+        {{else}}
+          <div class="rounded-md border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500 md:col-span-2">
+            No workflows are enabled for your role in this organization yet.
+          </div>
+        {{/each}}
+      </div>
+    {{else}}
+      <div class="rounded-md border border-gray-200 bg-white px-4 py-8 text-center text-sm text-gray-500">
+        You are not a member of any organization yet.
+      </div>
+    {{/if}}
+  {{/if}}
+</main>

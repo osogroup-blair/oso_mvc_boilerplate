@@ -5,6 +5,7 @@ import { logger } from "./lib/logger.js";
 import { prisma } from "./lib/prisma.js";
 import { syncAppRoutes } from "./lib/routeSync.js";
 import { syncAppPages } from "./lib/pageSync.js";
+import { syncWorkflowDefinitions } from "./lib/workflowSync.js";
 import { initRedis, initQueues, redisConnection } from "./lib/queue.js";
 import { startWorkers, stopWorkers } from "./workers/index.js";
 
@@ -18,6 +19,7 @@ const app = createApp();
 // Sync routes/pages to database on startup
 await syncAppRoutes();
 await syncAppPages();
+await syncWorkflowDefinitions();
 
 const server = app.listen(config.PORT, () => {
   logger.info(`🚀 Server on http://localhost:${config.PORT}`);
@@ -36,4 +38,3 @@ async function shutdown(signal: string) {
 
 process.on("SIGTERM", () => void shutdown("SIGTERM"));
 process.on("SIGINT", () => void shutdown("SIGINT"));
-

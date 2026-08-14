@@ -1,0 +1,112 @@
+<div class="space-y-6">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <a href="/admin/workflow-operations/schedules?orgId={{activeOrg.id}}" class="text-sm font-medium text-indigo-600 hover:text-indigo-700">Back to schedules</a>
+      <h1 class="mt-2 text-2xl font-semibold text-gray-900">{{schedule.name}}</h1>
+      <p class="mt-1 text-sm text-gray-600">{{schedule.scheduleId}}</p>
+      <p class="mt-1 text-xs text-gray-500">Organization: {{activeOrg.name}} · Workflow: {{schedule.workflowDefinition.name}}</p>
+    </div>
+    <div class="flex flex-wrap gap-2">
+      <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/trigger">
+        <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+        <button type="submit" class="rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">Trigger now</button>
+      </form>
+      {{#if (eq schedule.status 'PAUSED')}}
+        <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/unpause">
+          <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+          <button type="submit" class="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">Unpause</button>
+        </form>
+      {{else}}
+        <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/pause">
+          <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+          <button type="submit" class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pause</button>
+        </form>
+      {{/if}}
+    </div>
+  </div>
+
+  {{#if query.created}}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Schedule created.</div>
+  {{/if}}
+  {{#if query.paused}}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Schedule paused.</div>
+  {{/if}}
+  {{#if query.unpaused}}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Schedule unpaused.</div>
+  {{/if}}
+  {{#if query.triggered}}
+    <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Schedule trigger requested.</div>
+  {{/if}}
+
+  <section class="grid gap-4 md:grid-cols-4">
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Status</div>
+      <div class="mt-2 text-xl font-semibold text-gray-900">{{schedule.status}}</div>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Cron</div>
+      <div class="mt-2 font-mono text-sm text-gray-900">{{schedule.cronExpression}}</div>
+      <p class="mt-1 text-xs text-gray-500">{{schedule.timezone}}</p>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Overlap</div>
+      <div class="mt-2 text-sm font-semibold text-gray-900">{{schedule.overlapPolicy}}</div>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <div class="text-sm font-medium text-gray-500">Temporal Actions</div>
+      <div class="mt-2 text-sm font-semibold text-gray-900">{{temporalDescription.numActionsTaken}}</div>
+      <p class="mt-1 text-xs text-gray-500">Missed: {{temporalDescription.numActionsMissedCatchupWindow}} · Overlap skipped: {{temporalDescription.numActionsSkippedOverlap}}</p>
+    </div>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-2">
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-gray-900">Next Actions</h2>
+      <div class="mt-3 divide-y divide-gray-100">
+        {{#each temporalDescription.nextActionTimes}}
+          <div class="py-2 font-mono text-xs text-gray-700">{{this}}</div>
+        {{else}}
+          <p class="py-4 text-sm text-gray-500">No next action times reported.</p>
+        {{/each}}
+      </div>
+    </div>
+
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-gray-900">Recent Actions</h2>
+      <div class="mt-3 divide-y divide-gray-100">
+        {{#each temporalDescription.recentActions}}
+          <div class="py-2">
+            <div class="font-mono text-xs text-gray-700">{{scheduledTime}}</div>
+            <div class="text-xs text-gray-500">{{actionType}} · {{workflowId}}</div>
+          </div>
+        {{else}}
+          <p class="py-4 text-sm text-gray-500">No recent actions reported.</p>
+        {{/each}}
+      </div>
+    </div>
+  </section>
+
+  <section class="grid gap-6 lg:grid-cols-3">
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold text-gray-900">Input JSON</h2>
+      <pre class="mt-3 overflow-x-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">{{inputJson}}</pre>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold text-gray-900">Input Summary</h2>
+      <pre class="mt-3 overflow-x-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">{{inputSummaryJson}}</pre>
+    </div>
+    <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
+      <h2 class="text-sm font-semibold text-gray-900">Last Temporal Status</h2>
+      <pre class="mt-3 overflow-x-auto rounded-md bg-gray-950 p-3 text-xs text-gray-100">{{temporalStatusJson}}</pre>
+    </div>
+  </section>
+
+  <section class="rounded-lg border border-red-200 bg-white p-5 shadow-sm">
+    <h2 class="text-lg font-semibold text-red-900">Delete Schedule</h2>
+    <p class="mt-1 text-sm text-red-700">This deletes the Temporal schedule and soft-deletes the app projection. Historical workflow executions remain intact.</p>
+    <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/delete" class="mt-4">
+      <input type="hidden" name="orgId" value="{{activeOrg.id}}">
+      <button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Delete Schedule</button>
+    </form>
+  </section>
+</div>

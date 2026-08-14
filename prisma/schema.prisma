@@ -14,14 +14,14 @@ datasource db {
 // ─── Domain models ─────────────────────────────────────
 
 model User {
-  id       String  @id @default(uuid())
-  email    String  @unique
-  name     String
-  roleId   String
-  role     Role    @relation(fields: [roleId], references: [id])
-  bio      String?
-  isActive Boolean @default(true)
-  passwordHash String?
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  roleId          String
+  role            Role      @relation(fields: [roleId], references: [id])
+  bio             String?
+  isActive        Boolean   @default(true)
+  passwordHash    String?
   emailVerifiedAt DateTime?
 
   // Nested "object" field in the admin UI is stored as JSON.
@@ -31,9 +31,9 @@ model User {
   tags String[] @default([])
 
   // One-to-many relation → rendered as inline-editable table in admin.
-  posts    Post[]
-  sessions Session[]
-  passwordResetTokens PasswordResetToken[]
+  posts                   Post[]
+  sessions                Session[]
+  passwordResetTokens     PasswordResetToken[]
   emailVerificationTokens EmailVerificationToken[]
 
   // Demo: Project/Task seed back-relation.
@@ -42,6 +42,11 @@ model User {
   // Multi-tenancy: organizations this user belongs to.
   orgMembers OrgMember[]
 
+  // Workflow executions this user started.
+  workflowExecutions     WorkflowExecution[]
+  workflowSchedules      WorkflowSchedule[]
+  assignedWorkflowTasks  WorkflowHumanTask[]     @relation("WorkflowTaskAssignee")
+  workflowActionReceipts WorkflowActionReceipt[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -123,8 +128,10 @@ model Role {
   users       User[]
 
   // Back-relations for page/route access control.
-  pageRoles  PageRole[]
-  routeRoles RouteRole[]
+  pageRoles               PageRole[]
+  routeRoles              RouteRole[]
+  workflowDefinitionRoles WorkflowDefinitionRole[]
+  workflowHumanTaskRoles  WorkflowHumanTaskRole[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -367,11 +374,18 @@ model Asset {
 // ─── Multi-Tenancy ─────────────────────────────────────────────────
 
 model Organization {
-  id        String      @id @default(uuid())
-  name      String
-  slug      String      @unique
-  logoUrl   String?
-  members   OrgMember[]
+  id                          String                       @id @default(uuid())
+  name                        String
+  slug                        String                       @unique
+  logoUrl                     String?
+  members                     OrgMember[]
+  workflowExecutions          WorkflowExecution[]
+  workflowHumanTasks          WorkflowHumanTask[]
+  workflowActionReceipts      WorkflowActionReceipt[]
+  workflowSchedules           WorkflowSchedule[]
+  integrationConnections      IntegrationConnection[]
+  workflowIntegrationBindings WorkflowIntegrationBinding[]
+  activityIdempotencies       ActivityIdempotency[]
 
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
@@ -381,13 +395,13 @@ model Organization {
 }
 
 model OrgMember {
-  id       String       @id @default(uuid())
-  orgId    String
-  org      Organization @relation(fields: [orgId], references: [id])
-  userId   String
-  user     User         @relation(fields: [userId], references: [id])
-  role     OrgRole      @default(MEMBER)
-  joinedAt DateTime     @default(now())
+  id        String       @id @default(uuid())
+  orgId     String
+  org       Organization @relation(fields: [orgId], references: [id])
+  userId    String
+  user      User         @relation(fields: [userId], references: [id])
+  role      OrgRole      @default(MEMBER)
+  joinedAt  DateTime     @default(now())
   deletedAt DateTime?
 
   @@unique([orgId, userId])
@@ -401,3 +415,405 @@ enum OrgRole {
   MEMBER
 }
 
+// ─── Workflow Platform ─────────────────────────────────────────────────────
+
+model WorkflowDefinition {
+  id               String  @id @default(uuid())
+  key              String  @unique
+  slug             String  @unique
+  workflowType     String
+  contractVersion  Int
+  defaultTaskQueue String
+  name             String
+  description      String?
+  category         String?
+  icon             String?
+  isEnabled        Boolean @default(false)
+  presentation     Json    @default("{}")
+
+  roles                   WorkflowDefinitionRole[]
+  integrationRequirements WorkflowIntegrationRequirement[]
+  integrationBindings     WorkflowIntegrationBinding[]
+  executions              WorkflowExecution[]
+  schedules               WorkflowSchedule[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([key])
+  @@index([slug])
+  @@index([isEnabled])
+  @@index([deletedAt])
+}
+
+model WorkflowDefinitionRole {
+  id                   String             @id @default(uuid())
+  workflowDefinitionId String
+  workflowDefinition   WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id])
+  roleId               String
+  role                 Role               @relation(fields: [roleId], references: [id])
+  capability           WorkflowCapability
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([workflowDefinitionId, roleId, capability])
+  @@index([workflowDefinitionId])
+  @@index([roleId])
+  @@index([capability])
+  @@index([deletedAt])
+}
+
+model WorkflowIntegrationRequirement {
+  id                   String             @id @default(uuid())
+  workflowDefinitionId String
+  workflowDefinition   WorkflowDefinition @relation(fields: [workflowDefinitionId], references: [id])
+  key                  String
+  providerKey          String
+  capabilityKey        String?
+  label                String
+  description          String?
+  isRequired           Boolean            @default(true)
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([workflowDefinitionId, key])
+  @@index([workflowDefinitionId])
+  @@index([providerKey])
+  @@index([deletedAt])
+}
+
+model IntegrationConnection {
+  id                    String                       @id @default(uuid())
+  orgId                 String
+  org                   Organization                 @relation(fields: [orgId], references: [id])
+  name                  String
+  providerKey           String
+  status                IntegrationConnectionStatus  @default(ACTIVE)
+  config                Json                         @default("{}")
+  credentialCiphertext  String
+  credentialIv          String
+  credentialAuthTag     String
+  credentialKeyVersion  String
+  credentialFingerprint String?
+  lastTestedAt          DateTime?
+  lastTestStatus        IntegrationTestStatus?
+  lastTestMessage       String?
+  disabledAt            DateTime?
+  bindings              WorkflowIntegrationBinding[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([orgId, name])
+  @@index([orgId])
+  @@index([providerKey])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+model WorkflowIntegrationBinding {
+  id                    String                 @id @default(uuid())
+  orgId                 String
+  org                   Organization           @relation(fields: [orgId], references: [id])
+  workflowDefinitionId  String
+  workflowDefinition    WorkflowDefinition     @relation(fields: [workflowDefinitionId], references: [id])
+  requirementKey        String
+  connectionId          String
+  connection            IntegrationConnection  @relation(fields: [connectionId], references: [id])
+  isEnabled             Boolean                @default(true)
+  lastValidatedAt       DateTime?
+  lastValidationStatus  IntegrationTestStatus?
+  lastValidationMessage String?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([orgId, workflowDefinitionId, requirementKey])
+  @@index([orgId])
+  @@index([workflowDefinitionId])
+  @@index([connectionId])
+  @@index([deletedAt])
+}
+
+model ActivityIdempotency {
+  id             String                    @id @default(uuid())
+  orgId          String
+  org            Organization              @relation(fields: [orgId], references: [id])
+  scope          String
+  idempotencyKey String
+  status         ActivityIdempotencyStatus @default(RECEIVED)
+  requestHash    String
+  response       Json?
+  error          Json?
+  lockedAt       DateTime?
+  completedAt    DateTime?
+  expiresAt      DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([orgId, scope, idempotencyKey])
+  @@index([orgId])
+  @@index([scope])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([deletedAt])
+}
+
+enum IntegrationConnectionStatus {
+  ACTIVE
+  DISABLED
+  CONFIG_ERROR
+}
+
+enum IntegrationTestStatus {
+  NOT_TESTED
+  SUCCEEDED
+  FAILED
+}
+
+enum ActivityIdempotencyStatus {
+  RECEIVED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum WorkflowCapability {
+  START
+  VIEW
+  ACT
+  CANCEL
+  ADMIN
+}
+
+model WorkflowSchedule {
+  id                   String                        @id @default(uuid())
+  orgId                String
+  org                  Organization                  @relation(fields: [orgId], references: [id])
+  workflowDefinitionId String
+  workflowDefinition   WorkflowDefinition            @relation(fields: [workflowDefinitionId], references: [id])
+  createdById          String
+  createdBy            User                          @relation(fields: [createdById], references: [id])
+  scheduleId           String                        @unique
+  name                 String
+  description          String?
+  cronExpression       String
+  timezone             String                        @default("UTC")
+  input                Json                          @default("{}")
+  inputSummary         Json                          @default("{}")
+  status               WorkflowScheduleStatus        @default(ACTIVE)
+  overlapPolicy        WorkflowScheduleOverlapPolicy @default(SKIP)
+  catchupWindowSeconds Int                           @default(60)
+  pauseOnFailure       Boolean                       @default(true)
+  lastTemporalStatus   Json?
+  lastSyncedAt         DateTime?
+  pausedAt             DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([orgId, name])
+  @@index([orgId, status])
+  @@index([workflowDefinitionId])
+  @@index([createdById])
+  @@index([scheduleId])
+  @@index([deletedAt])
+}
+
+enum WorkflowScheduleStatus {
+  ACTIVE
+  PAUSED
+  DELETED
+  ERROR
+}
+
+enum WorkflowScheduleOverlapPolicy {
+  SKIP
+  BUFFER_ONE
+  BUFFER_ALL
+  CANCEL_OTHER
+  TERMINATE_OTHER
+  ALLOW_ALL
+}
+
+model WorkflowExecution {
+  id                   String                  @id @default(uuid())
+  orgId                String
+  org                  Organization            @relation(fields: [orgId], references: [id])
+  workflowDefinitionId String
+  workflowDefinition   WorkflowDefinition      @relation(fields: [workflowDefinitionId], references: [id])
+  startedById          String
+  startedBy            User                    @relation(fields: [startedById], references: [id])
+  workflowId           String                  @unique
+  runId                String?
+  businessKey          String?
+  status               WorkflowExecutionStatus @default(PENDING)
+  inputSummary         Json                    @default("{}")
+  stateSummary         Json                    @default("{}")
+  error                Json?
+  humanTasks           WorkflowHumanTask[]
+  actionReceipts       WorkflowActionReceipt[]
+  startedAt            DateTime                @default(now())
+  completedAt          DateTime?
+  lastSyncedAt         DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([orgId, status])
+  @@index([workflowDefinitionId])
+  @@index([startedById])
+  @@index([startedAt])
+  @@index([businessKey])
+  @@index([deletedAt])
+}
+
+enum WorkflowExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELED
+  TERMINATED
+  TIMED_OUT
+  UNKNOWN
+}
+
+model WorkflowHumanTask {
+  id                  String                  @id @default(uuid())
+  orgId               String
+  org                 Organization            @relation(fields: [orgId], references: [id])
+  workflowExecutionId String
+  workflowExecution   WorkflowExecution       @relation(fields: [workflowExecutionId], references: [id])
+  workflowId          String
+  runId               String?
+  taskKey             String
+  taskType            String
+  title               String
+  description         String?
+  status              WorkflowHumanTaskStatus @default(OPEN)
+  assignedUserId      String?
+  assignedUser        User?                   @relation("WorkflowTaskAssignee", fields: [assignedUserId], references: [id])
+  actionForm          Json                    @default("{}")
+  context             Json                    @default("{}")
+  result              Json?
+  dueAt               DateTime?
+  openedAt            DateTime                @default(now())
+  closedAt            DateTime?
+  roles               WorkflowHumanTaskRole[]
+  tokens              WorkflowTaskToken[]
+  receipts            WorkflowActionReceipt[]
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([workflowExecutionId, taskKey])
+  @@index([orgId, status])
+  @@index([workflowExecutionId])
+  @@index([workflowId])
+  @@index([assignedUserId])
+  @@index([dueAt])
+  @@index([deletedAt])
+}
+
+model WorkflowHumanTaskRole {
+  id     String            @id @default(uuid())
+  taskId String
+  task   WorkflowHumanTask @relation(fields: [taskId], references: [id])
+  roleId String
+  role   Role              @relation(fields: [roleId], references: [id])
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([taskId, roleId])
+  @@index([taskId])
+  @@index([roleId])
+  @@index([deletedAt])
+}
+
+model WorkflowTaskToken {
+  id             String            @id @default(uuid())
+  taskId         String
+  task           WorkflowHumanTask @relation(fields: [taskId], references: [id])
+  tokenHash      String            @unique
+  recipientEmail String?
+  label          String?
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  revokedAt      DateTime?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@index([taskId])
+  @@index([expiresAt])
+  @@index([consumedAt])
+  @@index([revokedAt])
+  @@index([deletedAt])
+}
+
+model WorkflowActionReceipt {
+  id                  String                      @id @default(uuid())
+  orgId               String
+  org                 Organization                @relation(fields: [orgId], references: [id])
+  taskId              String
+  task                WorkflowHumanTask           @relation(fields: [taskId], references: [id])
+  workflowExecutionId String
+  workflowExecution   WorkflowExecution           @relation(fields: [workflowExecutionId], references: [id])
+  actionKey           String
+  idempotencyKey      String
+  channel             WorkflowActionChannel
+  status              WorkflowActionReceiptStatus @default(RECEIVED)
+  actorUserId         String?
+  actorUser           User?                       @relation(fields: [actorUserId], references: [id])
+  tokenId             String?
+  requestHash         String
+  result              Json?
+  error               Json?
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([taskId, idempotencyKey])
+  @@index([orgId])
+  @@index([workflowExecutionId])
+  @@index([taskId])
+  @@index([actorUserId])
+  @@index([tokenId])
+  @@index([status])
+  @@index([deletedAt])
+}
+
+enum WorkflowHumanTaskStatus {
+  OPEN
+  COMPLETED
+  CANCELED
+  EXPIRED
+}
+
+enum WorkflowActionChannel {
+  AUTHENTICATED
+  TOKEN
+}
+
+enum WorkflowActionReceiptStatus {
+  RECEIVED
+  SUCCEEDED
+  FAILED
+}

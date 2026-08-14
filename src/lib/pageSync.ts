@@ -9,6 +9,8 @@ interface HardcodedPage {
 
 const HARDCODED_PAGES: HardcodedPage[] = [
   { slug: "projects", title: "Projects", filePath: "src/views/projects/index.hbs" },
+  { slug: "workflows", title: "Workflows", filePath: "src/views/workflows/catalog.hbs" },
+  { slug: "workflow-tasks", title: "Workflow Tasks", filePath: "src/views/workflow-tasks/inbox.hbs" },
   { slug: "admin", title: "Admin Login", filePath: "src/views/admin/login.hbs" }
   // Add other hardcoded pages here as needed.
 ];
