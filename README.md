@@ -282,6 +282,14 @@ workflow behavior such as labels, enablement, role policy, and execution
 visibility is controlled through admin/database configuration. Workflow task
 email links use the `PUBLIC_APP_URL` site setting from `/admin/settings`.
 
+For the production hardening sequence, acceptance gates, known gaps, and
+another-agent handoff instructions, see
+[`TEMPORAL-PRODUCTION-ROADMAP.md`](./TEMPORAL-PRODUCTION-ROADMAP.md). The
+operational procedures are in
+[`docs/temporal-operations-runbook.md`](./docs/temporal-operations-runbook.md).
+The executable test catalog for the integration plan and production roadmap is
+in [`TEMPORAL-TEST-CASES.md`](./TEMPORAL-TEST-CASES.md).
+
 Operational admin surfaces:
 
 | Surface | Purpose |

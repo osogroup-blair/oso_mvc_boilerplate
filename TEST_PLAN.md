@@ -3,6 +3,11 @@
 ## Purpose
 Prove the boilerplate is stable enough to use as a starting point for new applications. The plan checks that the foundation works end to end: build/runtime assets, database schema, seed data, auth/session flow, public server-rendered pages, admin CRUD scaffolding, site settings, dynamic data, API envelopes, and error handling.
 
+For the complete Temporal integration and production-hardening test catalog,
+see [`TEMPORAL-TEST-CASES.md`](./TEMPORAL-TEST-CASES.md). This file remains the
+baseline boilerplate acceptance plan; the Temporal catalog adds phase-specific
+unit, workflow, replay, self-hosted, resilience, and release gates.
+
 ## Test Environment
 - Runtime: Node 20+
 - Database: local Postgres from `docker-compose.yml`
