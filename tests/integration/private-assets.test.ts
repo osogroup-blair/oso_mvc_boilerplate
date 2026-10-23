@@ -1,0 +1,57 @@
+import { it, expect, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { prisma } from "../../src/lib/prisma.js";
+import { PrivateAssetModel } from "../../src/models/privateAsset.model.js";
+import { AssetModel } from "../../src/models/asset.model.js";
+import { PrivateAssetService } from "../../src/services/private-asset.service.js";
+import { PrivateAssetStorageService } from "../../src/services/private-asset-storage.service.js";
+
+afterAll(async () => { await prisma.$disconnect(); });
+it("isolates public/private data, enforces scope and recovers a retained pending upload", async () => {
+  const root = await mkdtemp(join(tmpdir(), "bp-private-integration-"));
+  try {
+    const publicRoot = join(root, "public"); await mkdir(publicRoot);
+    const organization = await prisma.organization.create({ data: { name: "Synthetic private asset org", slug: randomUUID() } });
+    const scope = { orgId: organization.id, actorId: "synthetic-actor", resourceType: "Document", resourceId: randomUUID() };
+    const policy = { authorize: async (input: typeof scope) => input.actorId === scope.actorId, maxBytes: 1024, allowedMimeTypes: ["text/plain"] };
+    const model = new PrivateAssetModel();
+    const storage = new PrivateAssetStorageService(join(root, "private"), "integration-private-v1", publicRoot);
+    const service = new PrivateAssetService(policy, model, storage);
+    const body = Buffer.from("PRIVATE DOCUMENT SYNTHETIC CANARY");
+    const file = { filename: "synthetic.txt", mimeType: "text/plain", buffer: body };
+    const operation = randomUUID();
+    const uploaded = await service.upload(scope, file, operation);
+    expect((await service.upload(scope, file, operation)).id).toBe(uploaded.id);
+    await expect(service.upload(scope, { ...file, buffer: Buffer.from("different") }, operation)).rejects.toMatchObject({ statusCode: 409 });
+    const concurrent = randomUUID();
+    const outcomes = await Promise.allSettled([service.upload(scope, file, concurrent), service.upload(scope, file, concurrent)]);
+    expect(outcomes.some(item => item.status === "fulfilled")).toBe(true);
+    const winner = await service.upload(scope, file, concurrent);
+    expect(await prisma.privateAsset.count({ where: { operationId: concurrent } })).toBe(1);
+    await service.remove(winner.id, scope);
+    expect((await service.read(uploaded.id, scope)).buffer).toEqual(body);
+    expect(await new AssetModel().findById(uploaded.id)).toBeNull();
+    expect((await new AssetModel().listAll()).some(item => item.id === uploaded.id)).toBe(false);
+    await expect(service.read(uploaded.id, { ...scope, resourceId: "other" })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.read(uploaded.id, { ...scope, orgId: "other" })).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.read(uploaded.id, { ...scope, actorId: "other" })).rejects.toMatchObject({ statusCode: 403 });
+    const row = (await model.findInScope(uploaded.id, scope))!;
+    await writeFile(join(root, "private", row.key), Buffer.from("TAMPERED"));
+    await expect(service.read(row.id, scope)).rejects.toThrow("integrity");
+    await writeFile(join(root, "private", row.key), body);
+    await prisma.privateAsset.update({ where: { id: row.id }, data: { state: "PENDING" } });
+    await expect(service.read(row.id, scope)).rejects.toThrow("unavailable");
+    await service.recoverUpload(row.id, scope);
+    expect((await model.findInScope(row.id, scope))?.state).toBe("READY");
+    const audits = await prisma.auditLog.findMany({ where: { entityId: row.id } });
+    expect(audits.length).toBeGreaterThan(1);
+    expect(JSON.stringify(audits)).not.toContain(body.toString());
+    expect(JSON.stringify(audits)).not.toContain("synthetic.txt");
+    await service.remove(row.id, scope);
+    expect(await model.findInScope(row.id, scope)).toBeNull();
+    expect((await prisma.privateAsset.findUnique({ where: { id: row.id } }))?.state).toBe("DELETED");
+  } finally { await rm(root, { recursive: true, force: true }); }
+});

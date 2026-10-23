@@ -1,4 +1,6 @@
-import { Client, Connection } from "@temporalio/client";
+import { AppError } from "./AppError.js";
+import { temporalDataConverter } from "./temporalPayload.js";
+import { Client, Connection, WorkflowIdReusePolicy, WorkflowIdConflictPolicy, WorkflowExecutionAlreadyStartedError, WorkflowUpdateFailedError } from "@temporalio/client";
 import { ScheduleOverlapPolicy } from "@temporalio/client";
 import type {
   ScheduleDescription,
@@ -9,6 +11,7 @@ import type {
 import temporalProto from "@temporalio/proto";
 import { config } from "../config/index.js";
 import { logger } from "./logger.js";
+import { temporalConnectionOptions } from "./temporalTransport.js";
 
 const { temporal } = temporalProto;
 
@@ -40,6 +43,7 @@ export interface TemporalStartInput {
   taskQueue: string;
   workflowId: string;
   args: unknown[];
+  requestHash?: string;
 }
 
 export interface TemporalStartResult {
@@ -84,21 +88,23 @@ export interface TemporalScheduleDescription {
 export class TemporalClientGateway {
   private connection: Connection | null = null;
   private client: Client | null = null;
+  private connecting: Promise<Client> | null = null;
 
   async getClient(): Promise<Client> {
-    if (this.client) return this.client;
-
-    this.connection = await Connection.connect({
-      address: config.TEMPORAL_ADDRESS,
-      tls: config.TEMPORAL_TLS_ENABLED ? {} : undefined,
+    if(this.client)return this.client;
+    if(!this.connecting)this.connecting=this.connectClient();
+    try{return await this.connecting;}finally{this.connecting=null;}
+  }
+  private async connectClient():Promise<Client> {
+    this.connection=await Connection.connect(await temporalConnectionOptions());
+    this.client=new Client({connection:this.connection,namespace:config.TEMPORAL_NAMESPACE,dataConverter:temporalDataConverter});return this.client;
+  }
+  async applicationCanary(timeoutMs=10000, taskQueue=config.TEMPORAL_TASK_QUEUE) {
+    const client=await this.getClient();
+    return client.connection.withDeadline(Date.now()+timeoutMs,async()=>{
+      const handle=await client.workflow.start("temporalApplicationCanaryWorkflow",{workflowId:`application-canary-${crypto.randomUUID()}`,taskQueue,args:[],workflowExecutionTimeout:timeoutMs});
+      return {workflowId:handle.workflowId,result:await handle.result()};
     });
-
-    this.client = new Client({
-      connection: this.connection,
-      namespace: config.TEMPORAL_NAMESPACE,
-    });
-
-    return this.client;
   }
 
   async getDiagnostics(): Promise<TemporalDiagnostics> {
@@ -117,7 +123,7 @@ export class TemporalClientGateway {
         latencyMs: Date.now() - start,
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Temporal connection failed";
+      const message = "TEMPORAL_UNAVAILABLE";
       logger.warn({ err }, "Temporal diagnostics failed");
 
       return {
@@ -151,8 +157,9 @@ export class TemporalClientGateway {
           includeTaskQueueStatus: true,
         }),
       ]);
-      const workflowPollers = workflow.pollers ?? [];
-      const activityPollers = activity.pollers ?? [];
+      const recent = (poller: {lastAccessTime?:unknown}) => { const date=this.protoDate(poller.lastAccessTime);return Boolean(date && Date.now()-date.getTime()<120000); };
+      const workflowPollers = (workflow.pollers ?? []).filter(recent);
+      const activityPollers = (activity.pollers ?? []).filter(recent);
 
       return {
         status: "ok",
@@ -173,7 +180,7 @@ export class TemporalClientGateway {
         ],
       };
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Temporal task queue diagnostics failed";
+      const message = "TEMPORAL_POLLER_CHECK_FAILED";
       logger.warn({ err, taskQueue }, "Temporal task queue diagnostics failed");
 
       return {
@@ -189,16 +196,20 @@ export class TemporalClientGateway {
 
   async startWorkflow(input: TemporalStartInput): Promise<TemporalStartResult> {
     const client = await this.getClient();
-    const handle = await client.workflow.start(input.workflowType, {
-      taskQueue: input.taskQueue,
-      workflowId: input.workflowId,
-      args: input.args,
-    });
-
-    return {
-      workflowId: handle.workflowId,
-      runId: handle.firstExecutionRunId,
-    };
+    try {
+      const handle = await client.workflow.start(input.workflowType, {
+        taskQueue: input.taskQueue, workflowId: input.workflowId, args: input.args,
+        workflowIdReusePolicy: WorkflowIdReusePolicy.REJECT_DUPLICATE,
+        workflowIdConflictPolicy: WorkflowIdConflictPolicy.FAIL,
+        memo: input.requestHash ? { applicationStartHash: input.requestHash } : undefined,
+      });
+      return { workflowId: handle.workflowId, runId: handle.firstExecutionRunId };
+    } catch (error) {
+      if (!(error instanceof WorkflowExecutionAlreadyStartedError) || !input.requestHash) throw error;
+      const existing = await client.workflow.getHandle(input.workflowId).describe();
+      if (existing.memo?.applicationStartHash !== input.requestHash || existing.type !== input.workflowType) throw error;
+      return { workflowId: input.workflowId, runId: existing.runId };
+    }
   }
 
   async describeWorkflow(workflowId: string, runId?: string): Promise<TemporalDescribeResult> {
@@ -216,9 +227,34 @@ export class TemporalClientGateway {
     return client.workflow.getHandle(workflowId, runId).query<T>(queryName);
   }
 
+  async workflowResult(workflowId: string, runId?: string): Promise<unknown> {
+    const client = await this.getClient();
+    return client.workflow.getHandle(workflowId, runId).result();
+  }
+
   async cancelWorkflow(workflowId: string, runId?: string): Promise<void> {
     const client = await this.getClient();
     await client.workflow.getHandle(workflowId, runId).cancel();
+  }
+
+  async submitHumanAction(workflowId: string, signalName: string, input: { operationId: string }, runId?: string) {
+    const client = await this.getClient();
+    const handle = client.workflow.getHandle(workflowId, runId);
+    return client.connection.withDeadline(Date.now() + 10_000, async () => {
+      try {
+        return await handle.executeUpdate<{ accepted: true; operationId: string }, [typeof input]>(
+          `${signalName}.submit`, { updateId: input.operationId, args: [input] },
+        );
+      } catch (error) {
+        const type = (error as { cause?: { type?: string } })?.cause?.type;
+        if (error instanceof WorkflowUpdateFailedError && ["ACTION_REJECTED", "ACTION_CONFLICT", "ACTION_ID_REQUIRED"].includes(type ?? ""))
+          throw new AppError("Workflow rejected this action before queue acceptance", 409, "WORKFLOW_ACTION_REJECTED");
+        // A Workflow may have closed after accepting the Update. Its retained
+        // acknowledgement is still readable by operation ID.
+        try { return await handle.getUpdateHandle<{ accepted: true; operationId: string }>(input.operationId).result(); }
+        catch { throw error; }
+      }
+    });
   }
 
   async signalWorkflow(workflowId: string, signalName: string, args: unknown[], runId?: string): Promise<void> {
@@ -285,6 +321,7 @@ export class TemporalClientGateway {
   }
 
   async close(): Promise<void> {
+    await this.connecting?.catch(()=>undefined);
     await this.connection?.close();
     this.connection = null;
     this.client = null;

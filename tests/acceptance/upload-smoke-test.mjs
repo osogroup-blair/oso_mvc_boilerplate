@@ -1,10 +1,11 @@
 import { PrismaClient } from "@prisma/client";
+import { requireOwnedAcceptance } from "./owned-runtime.mjs";
 
-const base = process.env.APP_BASE_URL ?? "http://127.0.0.1:3000";
+const { base, databaseUrl } = await requireOwnedAcceptance();
 const email = process.env.SMOKE_ADMIN_EMAIL ?? "alice@example.com";
 const password = process.env.SMOKE_ADMIN_PASSWORD ?? "password123";
 const filename = `upload-smoke-${Date.now()}.txt`;
-const prisma = new PrismaClient();
+const prisma = new PrismaClient({ datasources: { db: { url: databaseUrl } } });
 const results = [];
 
 function record(name, passed, details = {}) {
@@ -12,19 +13,27 @@ function record(name, passed, details = {}) {
 }
 
 try {
+  const loginPage = await fetch(`${base}/admin/login`);
+  const html = await loginPage.text();
+  const csrf = html.match(/name="_csrf"\s+value="([^"]+)"/)?.[1];
+  if (!csrf) throw Error("Missing login CSRF token");
+  const csrfCookie = loginPage.headers.getSetCookie().find(value => value.startsWith("csrf="))?.split(";")[0];
+  if (!csrfCookie) throw Error("Missing login CSRF cookie");
   const loginResponse = await fetch(`${base}/admin/login`, {
     method: "POST",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ email, password }),
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie: csrfCookie },
+    body: new URLSearchParams({ email, password, _csrf: csrf }),
     redirect: "manual",
   });
-  const cookie = loginResponse.headers.get("set-cookie")?.split(";")[0] ?? "";
-  record("Admin login produced session cookie", loginResponse.status === 302 && cookie.startsWith("session="), {
+  const sessionCookie = loginResponse.headers.getSetCookie().find(value => value.startsWith("session="))?.split(";")[0] ?? "";
+  const cookie = `${sessionCookie}; ${csrfCookie}`;
+  record("Admin login produced session cookie", loginResponse.status === 302 && sessionCookie.startsWith("session="), {
     status: loginResponse.status,
     location: loginResponse.headers.get("location"),
   });
 
   const form = new FormData();
+  form.set("_csrf", csrf);
   form.set("file", new Blob([Buffer.from("mvc boilerplate upload smoke test\n")], { type: "text/plain" }), filename);
 
   const uploadResponse = await fetch(`${base}/admin/assets/upload`, {
@@ -53,7 +62,7 @@ try {
   if (asset) {
     const deleteResponse = await fetch(`${base}/admin/assets/delete/${asset.id}`, {
       method: "POST",
-      headers: { cookie },
+      headers: { cookie, "x-csrf-token": csrf },
       redirect: "manual",
     });
     record("Uploaded test asset cleanup succeeds", deleteResponse.status === 302, {

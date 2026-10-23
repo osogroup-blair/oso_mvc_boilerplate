@@ -11,58 +11,52 @@ description: Use when a feature needs authentication, authorization/permissions,
 Five shared services handle concerns that span features. Use them — do not
 reinvent auth, caching, or file handling inside a domain service.
 
-## AuthService — sessions & identity
-`src/services/auth.service.ts`. Handles login, session verification, logout.
-- You rarely call it directly; the `requireAuth` middleware does. Protect a
-  route by adding `requireAuth` (see SKILL-route). It attaches `req.user`.
-- The password hash is a stub — replace with argon2/bcrypt before production.
+## AuthService and permissions
 
-## PermissionsService — "can this actor do X?"
-`src/services/permissions.service.ts`. A role→action matrix.
-- Enforce in a service or controller:
-  ```ts
-  permissionsService.assert(req.user.role, "delete"); // throws AppError.forbidden if not allowed
-  ```
-- **To add a rule**: edit the `MATRIX` (add an action to a role) or extend the
-  `Action` type for a new capability. For per-resource rules (e.g. "editors may
-  only edit their own pages"), add a method like
-  `canEditPage(user, page): boolean` and call it from the service.
+`AuthService` implements salted scrypt password hashing and database-backed
+session verification. Use `requireAuth`; it attaches the actor to `req.user`.
+`permissionsService.assert(roleName, "resource:action")` checks a role name;
+`permissionsService.can(roleId, resource, action)` checks a role ID. The
+permission vocabulary is `DEFINED_PERMISSIONS`, not a hardcoded MATRIX.
+Domain services must additionally check current org membership and resource
+ownership/assignment. A hidden org ID never proves access.
 
-## CacheService — swappable cache
-`src/services/cache.service.ts`. In-memory Map today; the interface is
-Redis-ready.
-- Use for expensive, rarely-changing reads:
-  ```ts
-  const key = `user:${id}`;
-  const hit = await cacheService.get<User>(key);
-  if (hit) return hit;
-  const fresh = await this.model.findById(id);
-  await cacheService.set(key, fresh, 60); // ttl seconds
-  return fresh;
-  ```
-- **Invalidate on write**: after update/delete, `cacheService.del(key)`.
-- Don't cache per-request or user-specific auth state.
+## CacheService
 
-## StorageService — swappable file storage
-`src/services/storage.service.ts`. Local disk now; S3-ready interface.
-- Save an upload and store the returned URL on your model:
-  ```ts
-  const { url } = await storageService.put(`avatars/${id}.png`, buffer);
-  await this.model.update(id, { avatarUrl: url });
-  ```
-- `get(key)` reads, `delete(key)` removes. Keep keys namespaced by domain.
+`get<T>(key)`, `set(key, value, ttlSeconds)` and `del(key)` use an in-memory map.
+Invalidate on writes. Do not cache current per-request authorization as if it
+were immutable.
 
-## AuditService — who changed what
-`src/services/audit.service.ts`. Already called by the example services on every
-create/update/delete.
-- **Always audit mutations.** Copy the pattern from `UserService`:
-  ```ts
-  await this.audit.record({ actorId, action: "widget.update", entityType: "Widget", entityId: id, changes: { before, after } });
-  ```
-- Auditing is best-effort and never throws — a failed audit won't break the
-  primary operation.
+## Public and private storage
 
-## Rule of thumb
-If a concern is not specific to one domain (identity, access, caching, files,
-audit trail), it belongs in one of these services, injected into your domain
-service — not written inline.
+The existing public `StorageService` exposes `upload(key, buffer, mimeType)`
+returning `{url, provider}`, and `delete(key, provider)`. It has no `put` or
+`get` method. Public Asset remains the media library.
+
+For protected bytes use `PrivateAssetService` with a mandatory domain policy,
+scoped identity and stable operation UUID. It provides bounded integrity-checked
+`upload/read/recoverUpload/remove` on a separate local backend/table with no
+public URL. See `SKILL-private-assets.md`. S3 private storage is not accepted.
+
+## Audit and commands
+
+`auditService.record({actorId, action, entityType, entityId, changes})` applies
+a metadata allowlist. Use `changes.after: {status, version, count}` or approved
+identifier/hash fields; do not supply raw document/model/prompt/token payloads.
+Failures are best-effort telemetry with safe codes. Historical rows are unchanged.
+
+When evidence is authoritative, have the model commit it with the state in one
+transaction. `ProjectModel.createWithReceipt` is the replayable command reference:
+state+receipt commit together, same operation and input replay one result, changed
+input conflicts, receipt failure rolls back. Services keep authorization and
+validation; transaction objects stay inside models. Do not infer that every
+resource mutation already has this guarantee.
+
+## Provider resolution
+
+Direct callers use `IntegrationConnectionResolverService.resolve` with org,
+provider and capability requirements. Workflow callers select bindings through
+`IntegrationResolverService`, which delegates secret/adapter construction to
+that same primitive. Keep returned adapters/secrets out of Workflows and views.
+
+See `docs/blueprint/EXTENSION-CONTRACTS.md` for security and acceptance limits.

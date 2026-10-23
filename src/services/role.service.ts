@@ -23,6 +23,8 @@ export class RoleService extends BaseService {
     return this.model.count(search);
   }
 
+  listWithUserCounts() { return this.model.listWithUserCounts(); }
+
   async getById(id: string) {
     const role = await this.model.findById(id);
     if (!role) throw AppError.notFound("Role");

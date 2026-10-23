@@ -31,6 +31,13 @@ export class OrganizationService extends BaseService {
     return org;
   }
 
+  async getDetailWithAvailableUsers(id: string) {
+    const org = await this.getById(id);
+    const memberIds = new Set(org.members.map(member => member.userId));
+    const availableUsers = (await this.users.listActiveBasic()).filter(user => !memberIds.has(user.id));
+    return { org, availableUsers };
+  }
+
   async create(data: { name: string; logoUrl?: string }, creatorUserId: string) {
     let slug = slugify(data.name);
 

@@ -1,7 +1,8 @@
 // Maps an admin schema key → a uniform CRUD interface backed by a service.
 // This is the seam that lets ONE admin controller drive ANY model.
 // Register a new model's resource here when you add its schema.
-import type { ListParams } from "../lib/query.js";
+import type { AdminResource } from "../admin/resource.types.js";
+export type { AdminResource } from "../admin/resource.types.js";
 import { AppError } from "../lib/AppError.js";
 import { userService } from "../services/user.service.js";
 import { pageService } from "../services/page.service.js";
@@ -12,16 +13,6 @@ import { projectService } from "../services/project.service.js";
 import { taskService } from "../services/task.service.js";
 import { tagService } from "../services/tag.service.js";
 
-
-export interface AdminResource {
-  list(params: ListParams): Promise<Record<string, unknown>[]>;
-  listAll(): Promise<Record<string, unknown>[]>; // for relation dropdowns
-  count(search?: string): Promise<number>;
-  getById(id: string): Promise<Record<string, unknown> | null>;
-  create(data: Record<string, unknown>, actorId?: string): Promise<Record<string, unknown>>;
-  update(id: string, data: Record<string, unknown>, actorId?: string): Promise<Record<string, unknown>>;
-  remove(id: string, actorId?: string): Promise<Record<string, unknown>>;
-}
 
 // Adapter: wraps the typed UserService in the generic AdminResource shape.
 // Casts are intentional and isolated here — services stay strongly typed.

@@ -1,3 +1,4 @@
+import { Router } from "express";
 import { createBullBoard } from "@bull-board/api";
 import { BullMQAdapter } from "@bull-board/api/bullMQAdapter";
 import { ExpressAdapter } from "@bull-board/express";
@@ -11,10 +12,16 @@ export function createQueueBoard() {
   const serverAdapter = new ExpressAdapter();
   serverAdapter.setBasePath("/admin/jobs");
 
-  const queues = [];
-  if (emailQueue) queues.push(new BullMQAdapter(emailQueue));
-
-  createBullBoard({ queues, serverAdapter });
-
-  return serverAdapter.getRouter();
+  const board = createBullBoard({ queues: [], serverAdapter });
+  let boundQueue = emailQueue;
+  if (boundQueue) board.setQueues([new BullMQAdapter(boundQueue)]);
+  const router = Router();
+  router.use((_req, _res, next) => {
+    if (boundQueue !== emailQueue) {
+      boundQueue = emailQueue;
+      board.setQueues(boundQueue ? [new BullMQAdapter(boundQueue)] : []);
+    }
+    next();
+  }, serverAdapter.getRouter());
+  return router;
 }

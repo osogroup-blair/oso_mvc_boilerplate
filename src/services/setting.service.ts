@@ -7,7 +7,7 @@ export const SETTING_KEYS = {
   SITE_NAME: { key: "SITE_NAME", group: "Identity", type: "text", label: "Site Name", help: "The name of this website. Used in page titles.", defaultValue: "My App" },
   SITE_DESCRIPTION: { key: "SITE_DESCRIPTION", group: "Identity", type: "textarea", label: "Site Description", help: "Default meta description for SEO.", defaultValue: "A schema-driven MVC boilerplate application." },
   PUBLIC_APP_URL: { key: "PUBLIC_APP_URL", group: "Identity", type: "url", label: "Public App URL", help: "Absolute base URL used when generating auth and workflow task email links.", defaultValue: "http://localhost:3000" },
-  HOME_PAGE_SLUG: { key: "HOME_PAGE_SLUG", group: "Identity", type: "select", label: "Home Page", help: "Select the published CMS page to serve as the homepage.", defaultValue: "welcome" },
+  HOME_PAGE_SLUG: { key: "HOME_PAGE_SLUG", group: "Identity", type: "select", label: "Home Page", help: "Choose the getting-started guide or a published CMS page as your homepage.", defaultValue: "getting-started" },
 
   // Content
   DEFAULT_PAGE_STATUS: { key: "DEFAULT_PAGE_STATUS", group: "Content", type: "select", label: "Default Page Status", help: "Default status for newly created CMS pages.", defaultValue: "DRAFT", options: ["DRAFT", "PUBLISHED", "ARCHIVED"] },

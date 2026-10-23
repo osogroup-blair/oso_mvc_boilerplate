@@ -32,7 +32,7 @@ export async function initRedis(): Promise<void> {
     await conn.connect();
     redisConnection = conn;
     redisAvailable = true;
-    logger.info({ url: config.REDIS_URL }, "Redis connected");
+    logger.info({ code: "REDIS_CONNECTED" }, "Redis connected");
 
     conn.on("error", (err) => {
       logger.warn({ err }, "Redis connection error — falling back to synchronous mode");

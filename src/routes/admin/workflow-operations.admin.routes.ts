@@ -13,3 +13,7 @@ workflowOperationsAdminRoutes.post("/schedules/:id/pause", workflowOperationsAdm
 workflowOperationsAdminRoutes.post("/schedules/:id/unpause", workflowOperationsAdminController.unpauseSchedule.bind(workflowOperationsAdminController));
 workflowOperationsAdminRoutes.post("/schedules/:id/trigger", workflowOperationsAdminController.triggerSchedule.bind(workflowOperationsAdminController));
 workflowOperationsAdminRoutes.post("/schedules/:id/delete", workflowOperationsAdminController.deleteSchedule.bind(workflowOperationsAdminController));
+
+workflowOperationsAdminRoutes.post("/recover-starts", workflowOperationsAdminController.recoverStarts.bind(workflowOperationsAdminController));
+
+workflowOperationsAdminRoutes.post("/canary", workflowOperationsAdminController.canary.bind(workflowOperationsAdminController));

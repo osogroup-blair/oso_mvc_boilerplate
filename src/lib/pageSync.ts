@@ -1,4 +1,4 @@
-import { prisma } from "./prisma.js";
+import { appSyncModel } from "../models/appSync.model.js";
 import { logger } from "./logger.js";
 
 interface HardcodedPage {
@@ -8,6 +8,7 @@ interface HardcodedPage {
 }
 
 const HARDCODED_PAGES: HardcodedPage[] = [
+  { slug: "getting-started", title: "Getting started · Implementation guide", filePath: "src/views/pages/getting-started.hbs" },
   { slug: "projects", title: "Projects", filePath: "src/views/projects/index.hbs" },
   { slug: "workflows", title: "Workflows", filePath: "src/views/workflows/catalog.hbs" },
   { slug: "workflow-tasks", title: "Workflow Tasks", filePath: "src/views/workflow-tasks/inbox.hbs" },
@@ -20,23 +21,7 @@ export async function syncAppPages() {
   
   try {
     for (const page of HARDCODED_PAGES) {
-      await prisma.page.upsert({
-        where: { slug: page.slug },
-        update: {
-          isHardcoded: true,
-          filePath: page.filePath,
-          title: page.title,
-          status: "PUBLISHED",
-          deletedAt: null // Restore if it was soft-deleted
-        },
-        create: {
-          slug: page.slug,
-          title: page.title,
-          isHardcoded: true,
-          filePath: page.filePath,
-          status: "PUBLISHED"
-        }
-      });
+      await appSyncModel.upsertPage(page);
     }
 
     logger.info("Hardcoded pages synchronized successfully.");

@@ -5,6 +5,7 @@ import { PageModel } from "../models/page.model.js";
 import { auditService, AuditService } from "./audit.service.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
+import { STATIC_PAGE_POLICIES } from "../lib/page-policies.js";
 
 // The admin form submits allowedRoles as an array of role IDs from the
 // multiRelation field. We strip it before calling Prisma and handle it
@@ -62,6 +63,9 @@ export class PageService extends BaseService {
   async update(id: string, data: PageWriteData, actorId?: string) {
     const before = await this.getById(id);
     const { allowedRoles: roleIds, ...prismaData } = data;
+    if (before.isHardcoded && !STATIC_PAGE_POLICIES.has(before.slug) && roleIds !== undefined) {
+      throw AppError.badRequest("This hardcoded page is inventory-only; its route owns authorization");
+    }
     const updated = await this.model.update(id, prismaData as Prisma.PageUpdateInput);
     // Always sync the role list (empty array = clear all; undefined = leave untouched).
     if (roleIds !== undefined) {

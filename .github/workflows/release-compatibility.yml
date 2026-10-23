@@ -1,0 +1,20 @@
+name: Production release compatibility gate
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  historical-replay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm ci && npm run build && npm run temporal:bundle
+      - name: Require reviewed deployed-release corpus and exact release bytes
+        run: |
+          DIGEST=$(node -p "JSON.parse(require('fs').readFileSync('artifacts/temporal-release/workflows.js.manifest.json')).sha256")
+          npm run temporal:replay -- --bundle=artifacts/temporal-release/workflows.js --bundle-sha256="$DIGEST"

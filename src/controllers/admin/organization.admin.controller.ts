@@ -3,7 +3,6 @@ import { z } from "zod";
 import { organizationService } from "../../services/organization.service.js";
 import { AppError } from "../../lib/AppError.js";
 import { ORG_ROLES } from "../../lib/orgRoles.js";
-import { userModel } from "../../models/user.model.js";
 
 const createOrgSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters").max(100),
@@ -33,11 +32,7 @@ export class OrganizationAdminController {
 
   async detail(req: Request, res: Response, next: NextFunction) {
     try {
-      const org = await organizationService.getById(req.params.id);
-      const allUsers = await userModel.listActiveBasic();
-
-      const memberUserIds = new Set(org.members.map((m) => m.userId));
-      const availableUsers = allUsers.filter((u) => !memberUserIds.has(u.id));
+      const { org, availableUsers } = await organizationService.getDetailWithAvailableUsers(req.params.id);
 
       res.render("admin/organizations/detail", {
         layout: "main",

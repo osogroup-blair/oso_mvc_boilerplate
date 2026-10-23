@@ -3,9 +3,11 @@
 import { Router } from "express";
 import { taskController } from "../controllers/task.controller.js";
 import { requireAuth } from "../middleware/auth.js";
+import { verifyBrowserMutation } from "../middleware/csrf.js";
 
 // Project-scoped task CRUD
 export const taskRoutes = Router({ mergeParams: true });
+taskRoutes.use(verifyBrowserMutation);
 
 taskRoutes.get(  "/",    taskController.list.bind(taskController));
 taskRoutes.post( "/",    requireAuth, taskController.create.bind(taskController));
@@ -14,6 +16,7 @@ taskRoutes.delete("/:id", requireAuth, taskController.destroy.bind(taskControlle
 
 // Tag management (M2M): /api/tasks/:id/tags/:tagId
 export const taskTagRoutes = Router();
+taskTagRoutes.use(verifyBrowserMutation);
 
 taskTagRoutes.post(  "/:id/tags/:tagId", requireAuth, taskController.addTag.bind(taskController));
 taskTagRoutes.delete("/:id/tags/:tagId", requireAuth, taskController.removeTag.bind(taskController));

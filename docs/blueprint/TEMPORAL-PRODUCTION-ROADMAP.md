@@ -1,5 +1,11 @@
 # Temporal Production-Grade Orchestration Roadmap
 
+Status: This roadmap retains production acceptance work and historical planning context.
+For current implementation status and remaining gates, use
+[the execution checklist](./EXECUTION-CHECKLIST-2026-10-20.md) and
+[extension contracts](./EXTENSION-CONTRACTS.md). Older gap statements below
+are not a current source inventory.
+
 **Status:** implementation handoff plan  
 **Baseline:** `cdab568` (`Add Temporal workflow orchestration platform`)  
 **Scope:** harden the existing generic workflow platform into a production-grade orchestration capability before additional business workflow migrations.
@@ -66,7 +72,7 @@ Each phase is a separate implementation slice. A coding agent must:
 4. add or update tests before declaring completion;
 5. run `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`, and relevant Temporal smoke/replay suites;
 6. run `git diff --check` and search for prohibited imports/secrets;
-7. update `TEST_RESULTS.md`, the operations runbook, and affected architecture/skill docs;
+7. update `docs/testing/TEST_RESULTS.md`, the operations runbook, and affected architecture/skill docs;
 8. record deferred work and evidence in the phase handoff section below.
 
 Do not begin the next phase if an exit gate fails. Commit each phase separately with a descriptive message.
@@ -79,11 +85,11 @@ Do not begin the next phase if an exit gate fails. Commit each phase separately 
 
 **Files to inspect/update:**
 
-- `TEMPORAL-INTEGRATION-PLAN.md`
-- `TEMPORAL-PRODUCTION-ROADMAP.md`
+- `docs/blueprint/EXTENSION-CONTRACTS.md`
+- `docs/blueprint/TEMPORAL-PRODUCTION-ROADMAP.md`
 - `docs/temporal-operations-runbook.md`
 - `skills/SKILL-temporal.md`
-- `TEST_PLAN.md`, `TEST_RESULTS.md`
+- `docs/testing/TEST_PLAN.md`, `docs/testing/TEST_RESULTS.md`
 - `README.md`, `ARCHITECTURE.md`, `AGENTS.md`
 
 **Work:**
@@ -286,9 +292,9 @@ Do not begin the next phase if an exit gate fails. Commit each phase separately 
 - `ARCHITECTURE.md`, `AGENTS.md`, `README.md`
 - `skills/SKILL-conventions.md`, `skills/SKILL-temporal.md`, `skills/README.md`
 - all affected skills under `skills/`
-- `TEST_PLAN.md`, `TEST_RESULTS.md`
+- `docs/testing/TEST_PLAN.md`, `docs/testing/TEST_RESULTS.md`
 - `docs/temporal-operations-runbook.md` and new DR/security/replay runbooks
-- `TEMPORAL-INTEGRATION-PLAN.md` and this roadmap
+- `docs/blueprint/EXTENSION-CONTRACTS.md` and this roadmap
 
 **Work:**
 

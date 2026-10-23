@@ -13,7 +13,7 @@ import { AppError } from "../lib/AppError.js";
 
 const registry = new Map<string, AdminSchema>();
 
-function register(schema: AdminSchema) {
+export function register(schema: AdminSchema) {
   registry.set(schema.key, schema);
 }
 

@@ -1,0 +1,73 @@
+import assert from "node:assert/strict";
+import { readFile,writeFile,cp,rm,mkdir } from "node:fs/promises";
+import { resolve } from "node:path";
+import { spawn,spawnSync } from "node:child_process";
+import { randomUUID,createHash } from "node:crypto";
+import { setTimeout as delay } from "node:timers/promises";
+import { Client,Connection } from "@temporalio/client";
+import { PrismaClient } from "@prisma/client";
+import { closeDatabase } from "../../dist/lib/prisma.js";
+import { temporalClientGateway } from "../../dist/lib/temporalClient.js";
+import { temporalDataConverter } from "../../dist/lib/temporalPayload.js";
+import { WorkflowHumanTaskService } from "../../dist/services/workflow-human-task.service.js";
+import { PrivateAssetService } from "../../dist/services/private-asset.service.js";
+import { PrivateAssetStorageService } from "../../dist/services/private-asset-storage.service.js";
+import { AssetService } from "../../dist/services/asset.service.js";
+const manifest=JSON.parse(await readFile(process.env.PLATFORM_TEST_MANIFEST,"utf8"));const container=`bp-platform-${manifest.runId}`,temporalContainer=container+"-temporal";const root=resolve(manifest.artifactDirectory);
+const run=(args,options={})=>spawnSync("docker",args,{...options,maxBuffer:64*1024*1024});
+const checkOwner=name=>{const result=run(["inspect",name],{encoding:"utf8"});assert.equal(result.status,0);const item=JSON.parse(result.stdout)[0];assert.equal(item.Config.Labels["codex.owner"],"mvc-boilerplate-platform-tests");assert.equal(item.Config.Labels["codex.run"],manifest.runId);};
+const command=args=>{const result=run(args,{encoding:"utf8"});assert.equal(result.status,0,`Owned command ${args[0]}`);return result.stdout;};
+checkOwner(container);checkOwner(temporalContainer);
+const prisma=new PrismaClient();assert.deepEqual(await prisma.$queryRaw`SELECT run_id FROM platform_test.ownership`,[{run_id:manifest.runId}]);
+const connection=await Connection.connect({address:process.env.TEMPORAL_ADDRESS});const client=new Client({connection,namespace:manifest.temporal.namespace,dataConverter:temporalDataConverter});
+const wait=async(check,label,timeout=20000)=>{const until=Date.now()+timeout;while(Date.now()<until){if(await check())return;await delay(100);}throw Error(`Deadline: ${label}`);};
+const children=new Set();const log=[];let unlock,transaction;let paused=false;const checks=[];
+const start=(overrides={})=>{const child=spawn(process.execPath,["dist/temporal/worker.js"],{env:{...process.env,...overrides},stdio:["ignore","pipe","pipe"]});children.add(child);child.exited=false;child.once("exit",code=>{child.exited=true;child.code=code;});for(const stream of [child.stdout,child.stderr])stream.on("data",chunk=>log.push(chunk.toString()));return child;};
+const stop=async child=>{child.kill("SIGTERM");await wait(async()=>child.exited,"Worker stop",15000);assert.equal(child.code,0);};
+try{
+ const role=await prisma.role.create({data:{name:randomUUID(),permissions:["workflow:act"]}});const user=await prisma.user.create({data:{name:"Restore operator",email:`${randomUUID()}@example.invalid`,passwordHash:"not-login",roleId:role.id}});
+ const org=await prisma.organization.create({data:{name:"Restore org",slug:randomUUID()}});await prisma.orgMember.create({data:{orgId:org.id,userId:user.id,role:"OWNER"}});
+ const scope={orgId:org.id,actorId:user.id,resourceType:"ReferenceNote",resourceId:randomUUID()};
+ const policy={maxBytes:4096,allowedMimeTypes:["text/plain"],authorize:async input=>input.actorId===user.id&&input.orgId===org.id};
+ const privateRoot=resolve(root,"private-restore");const storage=new PrivateAssetStorageService(privateRoot,"owned-restore-v1");const notes=new PrivateAssetService(policy,undefined,storage);
+ const attachment=await notes.upload(scope,{filename:"owned.txt",mimeType:"text/plain",buffer:Buffer.from("SYNTHETIC PROTECTED RESTORE")},randomUUID());
+ const equipment=new PrivateAssetService({...policy,allowedMimeTypes:["application/pdf"],authorize:async(input,action)=>policy.authorize(input)&&action!=="delete"},undefined,storage);
+ const pdfScope={...scope,resourceType:"ReferenceEquipment"};const pdf=await equipment.upload(pdfScope,{filename:"owned.pdf",mimeType:"application/pdf",buffer:Buffer.from("%PDF-1.4 synthetic fixture")},randomUUID());
+ await assert.rejects(equipment.remove(pdf.id,pdfScope));await assert.rejects(notes.read(attachment.id,{...scope,actorId:"other"}));await assert.rejects(new AssetService().delete(attachment.id));
+ checks.push("two real private-file policies; public deletion cannot reach protected bytes");
+ let worker=start();await wait(async()=>{try{return (await temporalClientGateway.applicationCanary(1500)).result.status==="ok";}catch{return false;}},"Worker ready");
+ const latencies=[];await Promise.all(Array.from({length:25},async()=>{const start=Date.now();await temporalClientGateway.applicationCanary(10000);latencies.push(Date.now()-start);}));latencies.sort((a,b)=>a-b);const p95=latencies[Math.ceil(latencies.length*.95)-1];assert(p95<10000);checks.push("25 concurrent real canaries within local 10s envelope");
+ checkOwner(temporalContainer);command(["pause",temporalContainer]);paused=true;
+ try{await assert.rejects(temporalClientGateway.applicationCanary(1000));}finally{command(["unpause",temporalContainer]);paused=false;}
+ await wait(async()=>{try{return (await temporalClientGateway.applicationCanary(2000)).result.status==="ok";}catch{return false;}},"partition recovery");checks.push("owned Temporal outage/deadline and recovery");
+ const waiting=await client.workflow.start("platformApprovalWorkflow",{workflowId:`restore-wait-${randomUUID()}`,taskQueue:manifest.temporal.taskQueue,args:[{title:"Restore",instructions:"Synthetic"},{orgId:org.id,startedById:user.id,workflowDefinitionKey:"platform.approval",actionProtocol:"update-v1"}]});
+ let task;await wait(async()=>{task=await prisma.workflowHumanTask.findFirst({where:{workflowId:waiting.workflowId,status:"OPEN"}});return Boolean(task);},"waiting task");
+ await prisma.workflowHumanTask.update({where:{id:task.id},data:{assignedUserId:user.id}});await stop(worker);
+ const before=JSON.stringify(await prisma.activityIdempotency.findMany({orderBy:{id:"asc"}}));
+ await prisma.$disconnect();await closeDatabase();
+ const backup=run(["exec",container,"pg_dump","-Fc","-U","platform","-d",manifest.database.name]);assert.equal(backup.status,0);await writeFile(resolve(root,"owned-database.dump"),backup.stdout);
+ await cp(privateRoot,privateRoot+".backup",{recursive:true});
+ // Destructive steps apply only to the labelled disposable DB, never an app DB.
+ checkOwner(container);assert.equal(manifest.database.name,`bp_platform_${manifest.runId.replaceAll("-","")}`);
+ command(["exec",container,"dropdb","--force","-U","platform",manifest.database.name]);command(["exec",container,"createdb","-U","platform",manifest.database.name]);
+ const restored=run(["exec","-i",container,"pg_restore","-U","platform","-d",manifest.database.name],{input:backup.stdout});assert.equal(restored.status,0);
+ await rm(privateRoot,{recursive:true});await cp(privateRoot+".backup",privateRoot,{recursive:true});
+ assert.deepEqual(await prisma.$queryRaw`SELECT run_id FROM platform_test.ownership`,[{run_id:manifest.runId}]);assert.equal(JSON.stringify(await prisma.activityIdempotency.findMany({orderBy:{id:"asc"}})),before);
+ assert.equal((await notes.read(attachment.id,scope)).buffer.toString(),"SYNTHETIC PROTECTED RESTORE");assert.equal((await equipment.read(pdf.id,pdfScope)).mimeType,"application/pdf");
+ worker=start();await wait(async()=>{try{return (await waiting.query("platformApprovalState")).taskId===task.id;}catch{return false;}},"restored waiting Workflow ready");
+ const service=new WorkflowHumanTaskService();const submitted=await service.submitAuthenticated({userId:user.id,roleId:role.id},{taskId:task.id,actionKey:"complete",input:{decision:"approved"},idempotencyKey:randomUUID()});assert.equal(submitted.receipt.status,"SUCCEEDED");assert.equal((await waiting.result()).phase,"approved");await stop(worker);
+ checks.push("owned PostgreSQL dump/restore plus private volume restore and retained waiting Workflow completion");
+ // Force shutdown while an actual application Activity waits on SQL.
+ let locked;const acquired=new Promise(resolve=>locked=resolve);const held=new Promise(resolve=>unlock=resolve);
+ transaction=prisma.$transaction(async tx=>{await tx.$executeRawUnsafe('LOCK TABLE "WorkflowExecution" IN ACCESS EXCLUSIVE MODE');locked();await held;},{timeout:30000});await acquired;
+ worker=start({TEMPORAL_SHUTDOWN_GRACE_MS:"500",TEMPORAL_SHUTDOWN_FORCE_MS:"1200",TEMPORAL_RESOURCE_CLOSE_MS:"700"});
+ const forced=await client.workflow.start("temporalPlatformHeartbeatWorkflow",{workflowId:`forced-${randomUUID()}`,taskQueue:manifest.temporal.taskQueue,args:[{},{orgId:org.id,startedById:user.id,workflowDefinitionKey:"platform.heartbeat"}]});
+ await wait(async()=>{const rows=await prisma.$queryRaw`SELECT count(*)::int AS count FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE '%WorkflowExecution%'`;return rows[0].count>0;},"forced in-flight Activity");
+ const signalled=Date.now();worker.kill("SIGTERM");await wait(async()=>worker.exited,"bounded forced process exit",7000);assert.notEqual(worker.code,0);const forcedMs=Date.now()-signalled;
+ unlock();await transaction;transaction=undefined;
+ worker=start();let recoveryTimer;try{await Promise.race([forced.result(),new Promise((_,reject)=>{recoveryTimer=setTimeout(()=>reject(Error("Forced Activity recovery deadline")),85000);})]);}finally{clearTimeout(recoveryTimer);}await stop(worker);checks.push("bounded forced process exit and retained Activity retry/restart");
+ await writeFile(resolve(root,"restore-failure-results.json"),JSON.stringify({result:"PASS",checks,canaryLoad:{concurrency:25,p95Ms:p95,localThresholdMs:10000},forcedExitMs:forcedMs,backupSha256:createHash("sha256").update(backup.stdout).digest("hex"),scope:"Disposable local fixtures; not production RPO/RTO/SLO certification"},null,2));console.log(JSON.stringify({result:"PASS",checks,p95Ms:p95,forcedExitMs:forcedMs}));
+}finally{
+ unlock?.();if(transaction)await transaction.catch(()=>{});if(paused)command(["unpause",temporalContainer]);
+ for(const worker of children)if(!worker.exited)worker.kill("SIGKILL");await writeFile(resolve(root,"restore-failure-worker.log"),log.join(""));await temporalClientGateway.close();await connection.close();await closeDatabase();await prisma.$disconnect();
+}

@@ -1,5 +1,8 @@
 # Browser Acceptance Test Results
 
+The August browser record below is historical. The October 20 source/runtime
+verification entry at the end supersedes any inference of current acceptance.
+
 Date: 2026-08-10
 Target: `http://127.0.0.1:3000`
 Browser engine: Installed Google Chrome, headless mode via Chrome DevTools Protocol
@@ -502,3 +505,8 @@ Implementation notes:
   startup behind Temporal patch id
   `workflow-execution-projection-ingestion-v1`; child workflows remain
   Temporal-only visibility.
+
+
+## October 20, 2026 — current blueprint verification
+
+The earlier August narrative remains historical. Current verification covers 144 unit tests in 39 files, 8 real PostgreSQL tests in 3 files, typecheck/lint/architecture/build, owned Chromium/Redis acceptance, actual Temporal lifecycle/reliability/replay/transport and restore/failure drills. Exact observed runs and limits are recorded in `docs/blueprint/EXECUTION-REPORT-2026-10-20.md`. Production compatibility remains blocked on the actual deployed release/history inventory; Solution Intent consumer adoption was not performed.

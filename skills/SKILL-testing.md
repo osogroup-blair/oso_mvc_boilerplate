@@ -60,12 +60,23 @@ Note the `.js` extension on the import — see SKILL-conventions.
 - **View helper**: pure functions like `blockPartial` — test directly, no mocks.
 
 ## Test database strategy
-- Model/integration tests run against a separate DB. `tests/setup.ts` points
-  `DATABASE_URL` at `…/boilerplate_test` when unset.
-- Create it once: `createdb boilerplate_test` (or a Docker equivalent), then
-  `DATABASE_URL=…_test npx prisma migrate deploy`.
-- Keep unit tests (mocked) and integration tests (real DB) separate so the fast
-  suite stays fast.
+- `tests/setup.ts` overwrites the unit database URL with an unreachable synthetic
+  endpoint and replaces Prisma with a throwing guard. Mock models/services;
+  never disable the guard or copy a real application URL into unit tests.
+- Test configuration skips dotenv. Owned fixtures supply explicit infrastructure.
+- `npm run test:platform:owned -- --image=<local-image-or-digest>` creates a
+  labelled disposable PostgreSQL container, ownership sentinel and per-run DB,
+  deploys migrations, runs integration tests and removes only owned resources.
+- After build, add `--temporal` for the actual built Worker SIGTERM/drain/restart
+  test on a separate owned Temporal stack. This does not prove force deadlines
+  or cross-release replay.
+- Browser/upload acceptance has no localhost/browser fallback. It requires
+  ownership checks for the app process, database and isolated browser profile.
+- See `docs/blueprint/EXTENSION-CONTRACTS.md` for manifests, native dependency
+  portability and the distinction between unit, runtime and release acceptance.
 
 ## Reference implementations
 `tests/services/user.service.test.ts` and `tests/services/page.service.test.ts`.
+
+
+October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.

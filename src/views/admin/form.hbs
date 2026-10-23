@@ -1,6 +1,6 @@
 <div class="flex items-center justify-between mb-6">
   <h1 class="text-2xl font-semibold">{{title}}</h1>
-  <a href="/admin/{{schema.key}}" class="text-sm text-gray-500">← Back to {{schema.labelPlural}}</a>
+  <a href="/admin/{{schema.key}}{{adminQuery}}" class="text-sm text-gray-500">← Back to {{schema.labelPlural}}</a>
 </div>
 
 {{#if isReadonly}}
@@ -10,15 +10,33 @@
 {{/if}}
 
 <form method="post" action="{{action}}" class="bg-white rounded-lg border border-gray-200 p-6 max-w-3xl">
+  {{#if validationErrors}}
+    <div role="alert" tabindex="-1" id="form-errors" class="mb-4 border border-red-400 p-3 text-red-800">
+      <h2 class="font-semibold">Correct these fields before saving</h2>
+      <ul>{{#each validationErrors}}<li><a href="#admin-json-payload">{{field}}: {{message}}</a></li>{{/each}}</ul>
+    </div>
+  {{/if}}
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+  {{#if adminMetadata}}
+    <input type="hidden" name="_adminOrgId" value="{{adminMetadata.orgId}}" />
+    <input type="hidden" name="_adminOperationId" value="{{adminMetadata.operationId}}" />
+    {{#if adminMetadata.versionSet}}<input type="hidden" name="_adminVersion" value="{{adminMetadata.expectedVersion}}" />{{/if}}
+  {{/if}}
   <fieldset {{#if isReadonly}}disabled{{/if}}>
+    {{#if formPayloadJson}}
+      <label for="admin-json-payload" class="block font-medium mb-2">Resource data (JSON)</label>
+      <p id="admin-json-help" class="text-sm text-gray-500 mb-2">Preserve JSON types for nested values, false and null. JavaScript is not required.</p>
+      <textarea id="admin-json-payload" name="_adminPayload" rows="18" maxlength="65536" aria-describedby="admin-json-help{{#if validationErrors}} form-errors{{/if}}" {{#if validationErrors}}aria-invalid="true" autofocus{{/if}} class="w-full rounded border p-3 font-mono text-sm">{{formPayloadJson}}</textarea>
+    {{else}}
     {{{renderFields schema.fields record relationOptions}}}
+    {{/if}}
   </fieldset>
 
   <div class="flex items-center gap-3 mt-6 pt-6 border-t border-gray-100">
     {{#unless isReadonly}}
       <button type="submit" class="bg-blue-600 text-white text-sm rounded px-5 py-2 hover:bg-blue-700">Save</button>
     {{/unless}}
-    <a href="/admin/{{schema.key}}" class="text-sm text-gray-500">
+    <a href="/admin/{{schema.key}}{{adminQuery}}" class="text-sm text-gray-500">
       {{#if isReadonly}}Go Back{{else}}Cancel{{/if}}
     </a>
   </div>
@@ -26,8 +44,14 @@
 
 {{#unless isNew}}
   {{#unless isReadonly}}
-    <form method="post" action="{{action}}/delete" class="max-w-3xl mt-4"
+    <form method="post" action="{{deleteAction}}" class="max-w-3xl mt-4"
       onsubmit="return confirm('Delete this {{schema.label}}?')">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+      {{#if adminMetadata}}
+        <input type="hidden" name="_adminOrgId" value="{{adminMetadata.orgId}}" />
+        <input type="hidden" name="_adminOperationId" value="{{adminMetadata.deleteOperationId}}" />
+        {{#if adminMetadata.versionSet}}<input type="hidden" name="_adminVersion" value="{{adminMetadata.expectedVersion}}" />{{/if}}
+      {{/if}}
       <button type="submit" class="text-sm text-red-600 hover:underline">Delete {{schema.label}}</button>
     </form>
   {{/unless}}

@@ -8,16 +8,19 @@
     </div>
     <div class="flex flex-wrap gap-2">
       <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/trigger">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
         <input type="hidden" name="orgId" value="{{activeOrg.id}}">
         <button type="submit" class="rounded-md border border-indigo-300 px-4 py-2 text-sm font-semibold text-indigo-700 hover:bg-indigo-50">Trigger now</button>
       </form>
       {{#if (eq schedule.status 'PAUSED')}}
         <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/unpause">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
           <input type="hidden" name="orgId" value="{{activeOrg.id}}">
           <button type="submit" class="rounded-md bg-green-600 px-4 py-2 text-sm font-semibold text-white hover:bg-green-700">Unpause</button>
         </form>
       {{else}}
         <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/pause">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
           <input type="hidden" name="orgId" value="{{activeOrg.id}}">
           <button type="submit" class="rounded-md bg-amber-600 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-700">Pause</button>
         </form>
@@ -105,6 +108,7 @@
     <h2 class="text-lg font-semibold text-red-900">Delete Schedule</h2>
     <p class="mt-1 text-sm text-red-700">This deletes the Temporal schedule and soft-deletes the app projection. Historical workflow executions remain intact.</p>
     <form method="POST" action="/admin/workflow-operations/schedules/{{schedule.id}}/delete" class="mt-4">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
       <input type="hidden" name="orgId" value="{{activeOrg.id}}">
       <button type="submit" class="rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Delete Schedule</button>
     </form>

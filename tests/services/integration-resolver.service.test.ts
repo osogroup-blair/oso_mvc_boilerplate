@@ -11,6 +11,7 @@ describe("IntegrationResolverService", () => {
         isEnabled: true,
         connection: {
           id: "conn-1",
+          orgId: "org-1",
           name: "Synthetic",
           providerKey: "synthetic.echo",
           status: IntegrationConnectionStatus.ACTIVE,

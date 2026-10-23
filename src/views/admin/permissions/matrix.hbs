@@ -29,6 +29,7 @@
 </div>
 
 <form method="POST" action="/admin/permissions" id="permissions-form">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
   <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
     <table class="w-full text-sm border-collapse">
       <thead>

@@ -218,3 +218,13 @@ force-logout a user. Active sessions are visible at `/admin/sessions`.
 - [ ] New hardcoded pages/routes are added to `pageSync.ts` / `routeSync.ts`.
 - [ ] `npm run typecheck` and `npm test` pass.
 
+
+
+## October 20, 2026 implementation status
+
+See `docs/blueprint/EXTENSION-CONTRACTS.md` for the current test ownership,
+CSRF, metadata-only audit, atomic command, private-file, tenant-admin, Worker,
+transport and release-bundle contracts. `docs/blueprint/DECISIONS.md` records
+compatibility and rollback constraints. The execution checklist (`docs/blueprint/EXECUTION-CHECKLIST-2026-10-20.md`) separates
+source, component, runtime and acceptance status. Historical test narratives
+above are not evidence that the current release is production-accepted.

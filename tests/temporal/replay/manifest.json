@@ -1,0 +1,7 @@
+{
+  "version": 1,
+  "supportedReleases": [],
+  "requiredCases": [],
+  "histories": [],
+  "note": "BLOCKED until deployment owners identify supported prior releases, review synthetic sanitized histories and enumerate required branches. Include child Workflow exports. Current-code histories do not establish historical compatibility."
+}

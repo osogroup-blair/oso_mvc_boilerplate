@@ -4,6 +4,8 @@ import {
   WorkflowHumanTaskStatus,
   type Prisma,
 } from "@prisma/client";
+import { workflowTaskPolicies, WorkflowTaskPolicies } from "./workflow-task-policy.service.js";
+import { stableHash } from "../lib/stable-hash.js";
 import { createHash, randomBytes } from "node:crypto";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
@@ -47,6 +49,7 @@ export interface SubmitTaskActionInput {
 }
 
 export class WorkflowHumanTaskService extends BaseService {
+  private isUniqueConstraintError(error:unknown) { return (error as {code?:string})?.code === "P2002"; }
   constructor(
     private readonly tasks: WorkflowHumanTaskModel = workflowHumanTaskModel,
     private readonly orgContext: OrganizationContextService = organizationContextService,
@@ -54,7 +57,8 @@ export class WorkflowHumanTaskService extends BaseService {
     private readonly temporal: TemporalClientGateway = temporalClientGateway,
     private readonly audit: AuditService = auditService,
     private readonly email: EmailService = emailService,
-    private readonly settings: typeof settingService = settingService
+    private readonly settings: typeof settingService = settingService,
+    private readonly policies: WorkflowTaskPolicies = workflowTaskPolicies
   ) {
     super("WorkflowHumanTaskService");
   }
@@ -74,6 +78,7 @@ export class WorkflowHumanTaskService extends BaseService {
     await this.assertCanAct(actor.roleId);
     const task = await this.tasks.findVisibleForUser(taskId, context.activeOrg.id, actor.userId, actor.roleId);
     if (!task) throw AppError.notFound("Workflow task");
+    await this.policies.assert(task.taskType, { task, actorUserId: actor.userId, channel: "AUTHENTICATED" });
     return {
       ...context,
       task,
@@ -84,6 +89,7 @@ export class WorkflowHumanTaskService extends BaseService {
   async getTokenTask(rawToken: string) {
     const token = await this.findValidToken(rawToken);
     const task = token.task;
+    await this.policies.assert(task.taskType, { task, tokenId: token.id, channel: "TOKEN" });
     if (task.status !== WorkflowHumanTaskStatus.OPEN) {
       throw AppError.conflict("Workflow task is no longer open");
     }
@@ -101,6 +107,7 @@ export class WorkflowHumanTaskService extends BaseService {
     const context = await this.requireActiveOrg(actor.userId, task.orgId);
     const visible = await this.tasks.findVisibleForUser(task.id, context.activeOrg.id, actor.userId, actor.roleId);
     if (!visible) throw AppError.forbidden("You cannot act on this workflow task");
+    await this.policies.assert(visible.taskType, {task:visible,actorUserId:actor.userId,channel:"AUTHENTICATED"});
     const action = this.getActionForTask(visible, input.actionKey);
 
     return this.submitAction(visible, action, input.input, {
@@ -112,11 +119,11 @@ export class WorkflowHumanTaskService extends BaseService {
   }
 
   async submitWithToken(rawToken: string, actionKey: string, actionInput: Record<string, unknown>, idempotencyKey: string) {
-    const token = await this.findValidToken(rawToken);
+    const token = await this.findValidToken(rawToken, true);
     const task = token.task;
-    if (task.status !== WorkflowHumanTaskStatus.OPEN) {
-      throw AppError.conflict("Workflow task is no longer open");
-    }
+    const prior = await this.tasks.findReceiptByIdempotencyKey(task.id,idempotencyKey);
+    if(token.consumedAt && (!prior || prior.tokenId!==token.id || prior.status!==WorkflowActionReceiptStatus.SUCCEEDED))throw AppError.conflict("Workflow task token has already been used");
+    await this.policies.assert(task.taskType,{task,tokenId:token.id,channel:"TOKEN"});
     const action = this.getActionForTask(task, actionKey);
     const result = await this.submitAction(task, action, actionInput, {
       idempotencyKey,
@@ -124,13 +131,13 @@ export class WorkflowHumanTaskService extends BaseService {
       tokenId: token.id,
       submittedBy: token.recipientEmail ?? "email-token",
     });
-    await this.tasks.consumeToken(token.id);
     return result;
   }
 
   async createHumanTask(input: CreateHumanTaskInput) {
     const execution = await this.tasks.findExecutionByWorkflowId(input.workflowId);
     if (!execution) throw AppError.notFound("Workflow execution");
+    if(input.runId && execution.runId && input.runId!==execution.runId)throw AppError.conflict("Workflow run mismatch");
     if (execution.orgId !== input.orgId) throw AppError.forbidden("Workflow execution organization mismatch");
 
     const existing = await this.tasks.findByWorkflowKey(execution.id, input.taskKey);
@@ -144,6 +151,7 @@ export class WorkflowHumanTaskService extends BaseService {
     const assignedUser = input.assignedUserEmail
       ? await this.tasks.findUserByEmail(input.assignedUserEmail)
       : null;
+    if(assignedUser && !await this.tasks.isActiveMember(assignedUser.id,execution.orgId))throw AppError.forbidden("Assigned user is not an active organization member");
     const roleIds = await this.resolveRoleIds(input.roleRequirements ?? []);
 
     const created = await this.tasks.createWithRoles(
@@ -213,6 +221,8 @@ export class WorkflowHumanTaskService extends BaseService {
     });
   }
 
+  async cancelOpenWorkflowTasks(input:{orgId:string;workflowId:string;runId:string}) { await this.tasks.cancelOpenWorkflowTasks(input); }
+
   private async submitAction(
     task: Awaited<ReturnType<WorkflowHumanTaskModel["findById"]>>,
     action: WorkflowActionRegistration,
@@ -226,28 +236,50 @@ export class WorkflowHumanTaskService extends BaseService {
     }
   ) {
     if (!task) throw AppError.notFound("Workflow task");
-    if (task.status !== WorkflowHumanTaskStatus.OPEN) throw AppError.conflict("Workflow task is no longer open");
-
+    input = action.validateInput(input);
+    const requestHash = this.hashJson({ actionKey: action.key, input });
     const existingReceipt = await this.tasks.findReceiptByIdempotencyKey(task.id, receiptInput.idempotencyKey);
+    if (existingReceipt && existingReceipt.requestHash !== requestHash) {
+      throw AppError.conflict("Workflow action idempotency key was already used for different input");
+    }
+    if (existingReceipt && (existingReceipt.actorUserId !== (receiptInput.actorUserId ?? null) || existingReceipt.tokenId !== (receiptInput.tokenId ?? null)))
+      throw AppError.conflict("Workflow action belongs to a different actor");
     if (existingReceipt?.status === WorkflowActionReceiptStatus.SUCCEEDED) {
       return { task, receipt: existingReceipt, alreadySubmitted: true };
     }
-    if (existingReceipt) throw AppError.conflict("Workflow action is already being processed");
+    if (existingReceipt?.status === WorkflowActionReceiptStatus.FAILED) throw AppError.conflict("Workflow action requires operator reconciliation");
+    if (task.status !== WorkflowHumanTaskStatus.OPEN && !existingReceipt) throw AppError.conflict("Workflow task is no longer open");
 
-    const requestHash = this.hashJson({ actionKey: action.key, input });
-    const receipt = await this.tasks.createReceipt({
-      orgId: task.orgId,
-      taskId: task.id,
-      workflowExecutionId: task.workflowExecutionId,
-      actionKey: action.key,
-      idempotencyKey: receiptInput.idempotencyKey,
-      channel: receiptInput.channel,
-      actorUserId: receiptInput.actorUserId,
-      tokenId: receiptInput.tokenId,
-      requestHash,
-    });
+    let receipt: Awaited<ReturnType<WorkflowHumanTaskModel["createReceipt"]>>;
+    try {
+      receipt = existingReceipt ?? await this.tasks.createReceipt({
+        orgId: task.orgId,
+        taskId: task.id,
+        workflowExecutionId: task.workflowExecutionId,
+        actionKey: action.key,
+        idempotencyKey: receiptInput.idempotencyKey,
+        channel: receiptInput.channel,
+        actorUserId: receiptInput.actorUserId,
+        tokenId: receiptInput.tokenId,
+        requestHash,
+        result: input as Prisma.InputJsonObject,
+      });
+    } catch (error) {
+      if ((error as { code?: string })?.code === "TASK_DELIVERY_CONFLICT") throw AppError.conflict("Workflow task already has a pending response");
+      if (!this.isUniqueConstraintError(error)) throw error;
+      const raced = await this.tasks.findReceiptByIdempotencyKey(task.id, receiptInput.idempotencyKey);
+      if (!raced) throw error;
+      if (raced.requestHash !== requestHash || raced.actorUserId !== (receiptInput.actorUserId ?? null) || raced.tokenId !== (receiptInput.tokenId ?? null)) {
+        throw AppError.conflict("Workflow action idempotency key was already used for different input");
+      }
+      if (raced.status === WorkflowActionReceiptStatus.SUCCEEDED) {
+        return { task, receipt: raced, alreadySubmitted: true };
+      }
+      receipt = raced;
+    }
 
-    const signalInput: WorkflowHumanActionInput = {
+    const signalInput: WorkflowHumanActionInput & { operationId: string } = {
+      operationId: receipt.id,
       taskId: task.id,
       actionKey: action.key,
       decision: String(input.decision ?? ""),
@@ -256,44 +288,32 @@ export class WorkflowHumanTaskService extends BaseService {
       submittedAt: new Date().toISOString(),
       submittedBy: receiptInput.submittedBy,
       channel: receiptInput.channel,
+      tokenId: receiptInput.tokenId,
     };
 
+    // Temporal persists the Update result under receipt.id, so a lost response or
+    // failed local commit can retrieve the same acknowledgement on retry.
     try {
-      await this.temporal.signalWorkflow(task.workflowId, action.signalName, [signalInput], task.runId ?? undefined);
-      const updatedTask = await this.tasks.update(task.id, {
-        status: WorkflowHumanTaskStatus.COMPLETED,
-        result: input as Prisma.InputJsonObject,
-        closedAt: new Date(),
-      });
-      const finalized = await this.tasks.finalizeReceipt(receipt.id, {
-        status: WorkflowActionReceiptStatus.SUCCEEDED,
-        result: input as Prisma.InputJsonObject,
-      });
-
-      await this.audit.record({
-        actorId: receiptInput.actorUserId ?? null,
-        action: "workflowHumanTask.submit",
-        entityType: "WorkflowHumanTask",
-        entityId: task.id,
-        changes: {
-          after: {
-            actionKey: action.key,
-            channel: receiptInput.channel,
-            decision: input.decision,
-          },
-        },
-      });
-
-      return { task: updatedTask, receipt: finalized, alreadySubmitted: false };
-    } catch (err) {
-      await this.tasks.finalizeReceipt(receipt.id, {
-        status: WorkflowActionReceiptStatus.FAILED,
-        error: {
-          message: err instanceof Error ? err.message : "Workflow action failed",
-        },
-      });
-      throw err;
+      if(task.workflowExecution.actionProtocol === "update-v1") {
+        const acknowledged = await this.temporal.submitHumanAction(task.workflowId,action.signalName,signalInput,task.runId ?? undefined);
+        if(!acknowledged.accepted || acknowledged.operationId!==receipt.id)throw AppError.conflict("Workflow did not acknowledge this action");
+      } else {
+        await this.temporal.signalWorkflow(task.workflowId,action.signalName,[signalInput],task.runId ?? undefined);
+      }
+    } catch (error) {
+      // Only a definitive Workflow rejection releases ownership. Transport errors
+      // keep the operation pending for recovery under the same Update ID.
+      if (error instanceof AppError && error.code === "WORKFLOW_ACTION_REJECTED") await this.tasks.rejectDelivery(task.id, receipt.id);
+      throw error;
     }
+    const committed = await this.tasks.commitDelivery({
+      taskId: task.id, receiptId: receipt.id, tokenId: receiptInput.tokenId,
+      result: {acknowledgement:task.workflowExecution.actionProtocol === "update-v1" ? "QUEUED" : "DELIVERED",businessOutcome:"PENDING",operationId:receipt.id},
+      audit: { actorId: receiptInput.actorUserId ?? null, action: "workflowHumanTask.deliver",
+        entityType: "WorkflowHumanTask", entityId: task.id,
+        changes: { after: { actionKey: action.key, channel: receiptInput.channel, operationId: receipt.id, acknowledgement: "QUEUED" } } },
+    });
+    return { ...committed, alreadySubmitted: false };
   }
 
   private async issueEmailToken(taskId: string, recipientEmail: string, ttlHours: number) {
@@ -327,11 +347,11 @@ export class WorkflowHumanTaskService extends BaseService {
     return `${normalizedBase}/workflow-task-tokens/${rawToken}`;
   }
 
-  private async findValidToken(rawToken: string) {
+  private async findValidToken(rawToken: string, allowConsumed = false) {
     const token = await this.tasks.findTokenByHash(this.hashToken(rawToken));
     if (!token) throw AppError.notFound("Workflow task token");
     if (token.deletedAt || token.revokedAt) throw AppError.forbidden("Workflow task token has been revoked");
-    if (token.consumedAt) throw AppError.conflict("Workflow task token has already been used");
+    if (token.consumedAt && !allowConsumed) throw AppError.conflict("Workflow task token has already been used");
     if (token.expiresAt.getTime() <= Date.now()) throw AppError.forbidden("Workflow task token has expired");
     return token;
   }
@@ -388,7 +408,7 @@ export class WorkflowHumanTaskService extends BaseService {
   }
 
   private hashJson(value: unknown) {
-    return createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    return stableHash(value);
   }
 }
 

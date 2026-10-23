@@ -56,7 +56,7 @@ export async function runSyntheticIntegration(
         echoed: echoed.echoed as Record<string, unknown>,
         replayed: false,
       };
-    }
+    }, { retrySafe: true }
   );
 
   return { ...result.value, replayed: result.replayed };
@@ -90,13 +90,17 @@ export async function runShowcaseSyntheticStep(
         echoed: echoed.echoed as Record<string, unknown>,
         replayed: false,
       };
-    }
+    }, { retrySafe: true }
   );
 
   return { ...result.value, replayed: result.replayed };
 }
 
+export async function cancelOpenWorkflowTasks(input:{orgId:string;workflowId:string;runId:string}) { await workflowHumanTaskService.cancelOpenWorkflowTasks(input); }
+export async function applicationCanary() { return {status:"ok"}; }
+
 export const activities = {
+  applicationCanary, cancelOpenWorkflowTasks,
   ensureWorkflowExecutionProjection,
   createHumanTask,
   closeHumanTask,

@@ -4,8 +4,10 @@ import { Router } from "express";
 import { projectController } from "../controllers/project.controller.js";
 import { requireAuth } from "../middleware/auth.js";
 import { enforcePagePermissions } from "../middleware/pageMeta.js";
+import { verifyBrowserMutation } from "../middleware/csrf.js";
 
 export const projectRoutes = Router();
+projectRoutes.use(verifyBrowserMutation);
 
 // Read — public
 projectRoutes.get("/",    enforcePagePermissions("projects"), projectController.list.bind(projectController));

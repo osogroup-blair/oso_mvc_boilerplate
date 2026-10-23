@@ -55,7 +55,7 @@ export class WorkflowTaskController {
         layout: "public",
         title: payload.task.title,
         ...payload,
-        idempotencyKey: randomUUID(),
+        idempotencyKey: z.string().uuid().safeParse(req.query.operationId).success ? req.query.operationId : randomUUID(),
         query: req.query,
       });
     } catch (err) {
@@ -90,7 +90,7 @@ export class WorkflowTaskController {
       if (err instanceof z.ZodError || err instanceof AppError) {
         const message = err instanceof z.ZodError ? err.errors[0].message : err.message;
         const orgId = typeof req.body?.orgId === "string" ? `?orgId=${encodeURIComponent(req.body.orgId)}&` : "?";
-        return res.redirect(`/workflow-tasks/${req.params.id}${orgId}error=${encodeURIComponent(message)}`);
+        return res.redirect(`/workflow-tasks/${req.params.id}${orgId}error=${encodeURIComponent(message)}${typeof req.body.idempotencyKey === "string" ? "&operationId="+encodeURIComponent(req.body.idempotencyKey):""}`);
       }
       next(err);
     }
@@ -104,7 +104,7 @@ export class WorkflowTaskController {
         title: payload.task.title,
         ...payload,
         rawToken: req.params.token,
-        idempotencyKey: randomUUID(),
+        idempotencyKey: z.string().uuid().safeParse(req.query.operationId).success ? req.query.operationId : randomUUID(),
         query: req.query,
       });
     } catch (err) {
@@ -115,11 +115,10 @@ export class WorkflowTaskController {
   async submitToken(req: Request, res: Response, next: NextFunction) {
     try {
       const base = actionBodyBaseSchema.parse(req.body);
-      const payload = await workflowHumanTaskService.getTokenTask(req.params.token);
       const { idempotencyKey: _idempotencyKey, _csrf, orgId: _orgId, ...rawInput } = req.body as Record<string, unknown>;
-      const input = payload.action.validateInput(rawInput);
+      const input = rawInput;
 
-      await workflowHumanTaskService.submitWithToken(
+      const result = await workflowHumanTaskService.submitWithToken(
         req.params.token,
         req.params.actionKey,
         input,
@@ -129,12 +128,12 @@ export class WorkflowTaskController {
       res.render("workflow-tasks/token-complete", {
         layout: "public",
         title: "Workflow Task Submitted",
-        task: payload.task,
+        task: result.task,
       });
     } catch (err) {
       if (err instanceof z.ZodError || err instanceof AppError) {
         const message = err instanceof z.ZodError ? err.errors[0].message : err.message;
-        return res.redirect(`/workflow-task-tokens/${encodeURIComponent(req.params.token)}?error=${encodeURIComponent(message)}`);
+        return res.redirect(`/workflow-task-tokens/${encodeURIComponent(req.params.token)}?error=${encodeURIComponent(message)}${typeof req.body.idempotencyKey === "string" ? "&operationId="+encodeURIComponent(req.body.idempotencyKey):""}`);
       }
       next(err);
     }

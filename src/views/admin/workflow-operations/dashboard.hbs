@@ -13,6 +13,14 @@
     </div>
   </div>
 
+  {{#if query.canary}}<p role="status">Application canary: {{query.canary}}. This does not test business providers.</p>{{/if}}
+  <form method="POST" action="/admin/workflow-operations/canary"><input type="hidden" name="_csrf" value="{{csrfToken}}" /><input type="hidden" name="orgId" value="{{activeOrg.id}}" /><button type="submit" class="rounded border px-3 py-2">Run application canary</button></form>
+  {{#if query.recovered}}<p role="status">Recovered {{query.recovered}} pending start(s) owned by your account.</p>{{/if}}
+  <form method="POST" action="/admin/workflow-operations/recover-starts">
+    <input type="hidden" name="_csrf" value="{{csrfToken}}" />
+    <input type="hidden" name="orgId" value="{{activeOrg.id}}" />
+    <button type="submit" class="rounded border px-3 py-2">Recover my pending starts</button>
+  </form>
   {{#if query.reconciled}}
     <div class="rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Projection reconciliation attempted for {{query.reconciled}} execution(s).</div>
   {{/if}}
@@ -32,7 +40,7 @@
         {{#if worker.reachable}}reachable{{else}}unknown{{/if}}
       </div>
       <p class="mt-2 text-xs text-gray-500">Task queue: {{worker.expectedTaskQueue}}</p>
-      <p class="mt-1 text-xs text-gray-500">Workflow pollers: {{worker.workflowPollerCount}} · Activity pollers: {{worker.activityPollerCount}}</p>
+      <p class="mt-1 text-xs text-gray-500">Workflow pollers: {{taskQueue.workflowPollerCount}} · Activity pollers: {{taskQueue.activityPollerCount}}</p>
     </div>
 
     <div class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -50,6 +58,7 @@
         <p class="mt-1 text-sm text-gray-600">Find executions that still look pending/running in Postgres after {{query.staleMinutes}} minutes and refresh them from Temporal.</p>
       </div>
       <form method="POST" action="/admin/workflow-operations/reconcile" class="flex items-center gap-2">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
         <input type="hidden" name="orgId" value="{{activeOrg.id}}">
         <input type="hidden" name="staleMinutes" value="{{query.staleMinutes}}">
         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Reconcile stale</button>
@@ -79,7 +88,7 @@
           {{#each staleExecutions}}
             <tr>
               <td class="px-4 py-3">
-                <a href="/workflows/executions/{{id}}" class="font-mono text-xs text-indigo-600 hover:text-indigo-700">{{temporalWorkflowId}}</a>
+                <a href="/workflows/executions/{{id}}?orgId={{../activeOrg.id}}" class="font-mono text-xs text-indigo-600 hover:text-indigo-700">{{workflowId}}</a>
               </td>
               <td class="px-4 py-3 text-sm text-gray-700">{{workflowDefinition.name}}</td>
               <td class="px-4 py-3 text-sm text-gray-700">{{status}}</td>

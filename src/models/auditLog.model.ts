@@ -1,10 +1,12 @@
 import { BaseModel } from "./BaseModel.js";
-import type { AuditEntry } from "../services/audit.service.js";
+import type { AuditEntry } from "../lib/audit-contracts.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
+import { safeAuditEntry } from "../lib/audit-policy.js";
 
 export class AuditLogModel extends BaseModel {
   create(entry: AuditEntry) {
+    entry = safeAuditEntry(entry);
     return this.db.auditLog.create({
       data: {
         actorId: entry.actorId ?? null,

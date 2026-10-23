@@ -1,7 +1,9 @@
 import { Router } from "express";
 import { authController } from "../controllers/auth.controller.js";
+import { verifyBrowserMutation } from "../middleware/csrf.js";
 
 export const authRoutes = Router();
+authRoutes.use(verifyBrowserMutation);
 
 // Registration
 authRoutes.get("/register", authController.registerForm.bind(authController));

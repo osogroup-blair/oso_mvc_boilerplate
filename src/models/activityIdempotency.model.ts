@@ -1,4 +1,4 @@
-import { ActivityIdempotencyStatus, type Prisma } from "@prisma/client";
+import { ActivityIdempotencyStatus, Prisma } from "@prisma/client";
 import { BaseModel } from "./BaseModel.js";
 
 export class ActivityIdempotencyModel extends BaseModel {
@@ -26,49 +26,31 @@ export class ActivityIdempotencyModel extends BaseModel {
     });
   }
 
-  async takeOverStaleRunning(id: string, requestHash: string, staleBefore: Date) {
+  async claim(id: string, requestHash: string, attempt: number, staleBefore: Date) {
     const result = await this.db.activityIdempotency.updateMany({
-      where: {
-        id,
-        requestHash,
-        status: ActivityIdempotencyStatus.RUNNING,
-        lockedAt: { lte: staleBefore },
-        ...this.notDeleted,
-      },
-      data: {
-        lockedAt: new Date(),
-        completedAt: null,
-        response: undefined,
-        error: undefined,
-      },
+      where: { id, requestHash, attempt, ...this.notDeleted, OR: [
+        { status: ActivityIdempotencyStatus.RETRYABLE },
+        { status: ActivityIdempotencyStatus.UNCERTAIN },
+        { status: ActivityIdempotencyStatus.RUNNING, lockedAt: { lte: staleBefore } },
+      ] },
+      data: { status: ActivityIdempotencyStatus.RUNNING, attempt: { increment: 1 }, lockedAt: new Date(),
+        completedAt: null, response: Prisma.DbNull, error: Prisma.DbNull },
     });
+    return result.count ? { id, attempt: attempt + 1 } : null;
+  }
 
-    if (result.count === 0) return null;
-    return this.db.activityIdempotency.findFirst({
-      where: { id, ...this.notDeleted },
+  complete(id: string, attempt: number, response: Prisma.InputJsonValue, providerReceiptId?: string) {
+    return this.db.activityIdempotency.updateMany({
+      where: { id, attempt, status: ActivityIdempotencyStatus.RUNNING, ...this.notDeleted },
+      data: { status: ActivityIdempotencyStatus.SUCCEEDED, response, providerReceiptId,
+        error: Prisma.DbNull, completedAt: new Date() },
     });
   }
 
-  complete(id: string, response: Prisma.InputJsonValue) {
-    return this.db.activityIdempotency.update({
-      where: { id },
-      data: {
-        status: ActivityIdempotencyStatus.SUCCEEDED,
-        response,
-        error: undefined,
-        completedAt: new Date(),
-      },
-    });
-  }
-
-  fail(id: string, error: Prisma.InputJsonValue) {
-    return this.db.activityIdempotency.update({
-      where: { id },
-      data: {
-        status: ActivityIdempotencyStatus.FAILED,
-        error,
-        completedAt: new Date(),
-      },
+  fail(id: string, attempt: number, status: ActivityIdempotencyStatus, error: Prisma.InputJsonValue) {
+    return this.db.activityIdempotency.updateMany({
+      where: { id, attempt, status: ActivityIdempotencyStatus.RUNNING, ...this.notDeleted },
+      data: { status, error, completedAt: new Date() },
     });
   }
 }

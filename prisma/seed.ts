@@ -919,7 +919,7 @@ async function main() {
 
   // Global settings
   const defaultSettings = [
-    { key: "HOME_PAGE_SLUG", value: "welcome" },
+    { key: "HOME_PAGE_SLUG", value: "getting-started" },
     { key: "SITE_NAME", value: "My App" },
     { key: "SITE_DESCRIPTION", value: "A schema-driven MVC boilerplate application." },
     { key: "DEFAULT_PAGE_STATUS", value: "DRAFT" },

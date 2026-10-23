@@ -130,7 +130,7 @@ src/
     role.service.ts        Role CRUD. Manages permissions String[].
     route.service.ts       Dynamic URL routing CRUD + pattern lookup.
     navigationItem.service.ts  Hierarchical nav tree builder (recursive parent/children).
-    session.service.ts     listActive / countActive / revoke (hard delete + audit).
+    session.service.ts     listActive / countActive / revoke (soft delete + audit).
     setting.service.ts     Site settings: SETTING_KEYS registry, in-memory cache, get/set/setMany.
     project.service.ts     Project CRUD. Owner FK. Soft-delete aware.
     task.service.ts        Task CRUD with M2M tag management (TaskTag join rows).
@@ -357,7 +357,8 @@ that misses all static Express routes, `dynamicRouting` middleware runs and:
    renders `pages/show`; `APP` → falls through (already handled).
 
 `routeSync.ts` runs at startup to upsert known Express app routes as `APP`-type
-records so admins can see them and add role restrictions.
+inventory records so admins can see them. APP records are read-only; static
+Express routes do not acquire database authorization by being discovered.
 
 ### Site Settings
 `SiteSetting` is a key-value table. `settingService` wraps it with:
@@ -391,7 +392,10 @@ so all Handlebars templates can render the nav without fetching data.
 ### Page Sync
 `pageSync.ts` runs at startup. It upserts the `HARDCODED_PAGES` list (routes
 backed by real `.hbs` files, e.g. `/projects`, `/admin/login`) into the `Page`
-table so the admin can see them, assign access roles, and they appear in nav.
+table as inventory. Role editing is effective only for CMS pages and explicitly
+guarded static slugs in `STATIC_PAGE_POLICIES`; other hardcoded rows hide role
+controls and reject role writes. The projects policy currently guards its index,
+not every project detail route. Navigation filtering is not direct-URL authorization.
 
 ### Workflow Catalog Sync
 `workflowSync.ts` runs at startup after page/route sync. It validates the
@@ -646,3 +650,16 @@ Nothing here is invented per-resource — every step copies the `user.*` or
   `WorkflowExecution` rows from Temporal history without changing workflow
   execution itself.
 
+
+
+## October 20, 2026 implementation status
+
+See `docs/blueprint/EXTENSION-CONTRACTS.md` for the current test ownership,
+CSRF, metadata-only audit, atomic command, private-file, tenant-admin, Worker,
+transport and release-bundle contracts. `docs/blueprint/DECISIONS.md` records
+compatibility and rollback constraints. The execution checklist (`docs/blueprint/EXECUTION-CHECKLIST-2026-10-20.md`) separates
+source, component, runtime and acceptance status. Historical test narratives
+above are not evidence that the current release is production-accepted.
+
+
+October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.

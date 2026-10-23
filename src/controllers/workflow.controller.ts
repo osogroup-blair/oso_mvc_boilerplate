@@ -50,6 +50,7 @@ export class WorkflowController {
         layout: "public",
         title: payload.definition.name,
         ...payload,
+        operationId: z.string().uuid().safeParse(req.query.operationId).success ? req.query.operationId : payload.operationId,
         selectedOrgId: payload.activeOrg.id,
         query: req.query,
       });
@@ -70,7 +71,7 @@ export class WorkflowController {
       const input = registration.validateStart(rawInput);
       const execution = await workflowExecutionService.start(
         { userId: req.user.id, roleId: req.user.roleId },
-        { slug: req.params.slug, orgId: base.orgId, input }
+        { slug: req.params.slug, orgId: base.orgId, operationId: z.string().uuid().parse(req.body.operationId), input }
       );
 
       res.redirect(`/workflows/executions/${execution.id}?orgId=${encodeURIComponent(execution.orgId)}&started=1`);
@@ -78,7 +79,7 @@ export class WorkflowController {
       if (err instanceof z.ZodError || err instanceof AppError) {
         const message = err instanceof z.ZodError ? err.errors[0].message : err.message;
         const orgId = typeof req.body?.orgId === "string" ? `?orgId=${encodeURIComponent(req.body.orgId)}&` : "?";
-        return res.redirect(`/workflows/${req.params.slug}${orgId}error=${encodeURIComponent(message)}`);
+        return res.redirect(`/workflows/${req.params.slug}${orgId}error=${encodeURIComponent(message)}${typeof req.body.operationId === "string" ? "&operationId="+encodeURIComponent(req.body.operationId):""}`);
       }
       next(err);
     }

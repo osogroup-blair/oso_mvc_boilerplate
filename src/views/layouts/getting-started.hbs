@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Fork, run and extend the MVC Boilerplate. A practical guide to its admin, CMS, organizations, Temporal workflows and shared platform features." />
+  <title>{{title}} · MVC Boilerplate</title>
+  <link rel="stylesheet" href="/css/getting-started.css" />
+  <script src="/js/getting-started.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="{{applicationHomeHref}}" aria-label="Application home"><span class="brand-mark" aria-hidden="true">m<span>v</span>c</span><span>MVC Boilerplate<span class="brand-caption">THE DEVELOPER STARTING POINT</span></span></a>
+      <nav aria-label="Guide sections" class="header-nav"><a href="#quickstart">Get started</a><a href="#features">The toolkit</a><a href="#build">Build a feature</a></nav>
+      <div class="header-actions"><a class="button button-small button-primary" href="{{applicationHomeHref}}">Application home <span aria-hidden="true">↗</span></a>
+      <a class="button button-small button-outline" href="/admin">{{#if user}}Open admin{{else}}Sign in to admin{{/if}} <span aria-hidden="true">↗</span></a></div>
+    </div>
+  </header>
+  <main id="main-content">{{{body}}}</main>
+  <footer class="site-footer container"><a class="footer-brand" href="/getting-started">MVC Boilerplate<span>Structure for your ideas. Room for your domain.</span></a><div><a href="https://github.com/osogroup-blair/oso_mvc_boilerplate" target="_blank" rel="noopener noreferrer">Upstream source ↗</a><a href="{{applicationHomeHref}}">Application home ↗</a><a href="#main-content">Back to top ↑</a></div></footer>
+  <div id="guide-status" class="sr-only" role="status" aria-live="polite"></div>
+</body>
+</html>

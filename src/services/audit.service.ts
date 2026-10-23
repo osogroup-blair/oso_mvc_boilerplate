@@ -2,13 +2,9 @@
 import { BaseService } from "./BaseService.js";
 import { AuditLogModel } from "../models/auditLog.model.js";
 
-export interface AuditEntry {
-  actorId?: string | null;
-  action: string; // e.g. "user.update"
-  entityType: string; // e.g. "User"
-  entityId?: string | null;
-  changes?: { before?: unknown; after?: unknown } | null;
-}
+import type { AuditEntry } from "../lib/audit-contracts.js";
+export type { AuditEntry } from "../lib/audit-contracts.js";
+import { safeAuditEntry } from "../lib/audit-policy.js";
 
 export class AuditService extends BaseService {
   constructor(private readonly model = new AuditLogModel()) {
@@ -17,10 +13,10 @@ export class AuditService extends BaseService {
 
   async record(entry: AuditEntry): Promise<void> {
     try {
-      await this.model.create(entry);
-    } catch (err) {
+      await this.model.create(safeAuditEntry(entry));
+    } catch (_err) {
       // Auditing must never break the primary operation.
-      this.log.error({ err, entry }, "Failed to write audit log");
+      this.log.error({ code: "AUDIT_WRITE_FAILED" }, "Failed to write audit log");
     }
   }
 }

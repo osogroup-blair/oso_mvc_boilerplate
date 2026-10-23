@@ -15,8 +15,9 @@ import { workflowAdminRoutes } from "./admin/workflow.admin.routes.js";
 import { integrationAdminRoutes } from "./admin/integration.admin.routes.js";
 import { workflowOperationsAdminRoutes } from "./admin/workflow-operations.admin.routes.js";
 import multer from "multer";
+import { verifyBrowserMutation, exposeQueueCsrf } from "../middleware/csrf.js";
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024, files: 1, fields: 10 } });
 
 
 
@@ -24,11 +25,15 @@ export const adminRoutes = Router();
 
 // Public routes for admin auth
 adminRoutes.get("/login", adminAuthController.loginForm.bind(adminAuthController));
-adminRoutes.post("/login", adminAuthController.login.bind(adminAuthController));
-adminRoutes.post("/logout", adminAuthController.logout.bind(adminAuthController));
+adminRoutes.post("/login", verifyBrowserMutation, adminAuthController.login.bind(adminAuthController));
+adminRoutes.post("/logout", requireAuth, verifyBrowserMutation, adminAuthController.logout.bind(adminAuthController));
 
 // Guard all subsequent admin CRUD routes
 adminRoutes.use(requireAuth);
+
+// Multipart must be parsed before reading the body token. No bytes persist here.
+adminRoutes.post("/assets/upload", upload.single("file"), verifyBrowserMutation, assetController.upload.bind(assetController));
+adminRoutes.use(verifyBrowserMutation);
 
 // Inject currentPath + adminUser into every admin render — consumed by the sidebar partial.
 adminRoutes.use((req, res, next) => {
@@ -59,11 +64,10 @@ adminRoutes.post("/sessions/:id/logout", requirePermission("user", "update"), se
 
 // Asset / Media Library
 adminRoutes.get("/assets", assetController.list.bind(assetController));
-adminRoutes.post("/assets/upload", upload.single("file"), assetController.upload.bind(assetController));
 adminRoutes.post("/assets/delete/:id", assetController.delete.bind(assetController));
 
 // Background Job Queue Dashboard (Bull Board) — only active when Redis is available
-adminRoutes.use("/jobs", createQueueBoard());
+adminRoutes.use("/jobs", exposeQueueCsrf, createQueueBoard());
 
 // Organizations (Multi-Tenancy)
 adminRoutes.use("/organizations", orgAdminRoutes);

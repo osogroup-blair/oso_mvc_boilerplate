@@ -1,9 +1,10 @@
 <div class="flex items-center justify-between mb-6">
   <h1 class="text-2xl font-semibold">{{schema.labelPlural}}</h1>
-  <a href="/admin/{{schema.key}}/new" class="bg-blue-600 text-white text-sm rounded px-4 py-2 hover:bg-blue-700">+ New {{schema.label}}</a>
+  <a href="/admin/{{schema.key}}/new{{adminQuery}}" class="bg-blue-600 text-white text-sm rounded px-4 py-2 hover:bg-blue-700">+ New {{schema.label}}</a>
 </div>
 
 <form method="get" class="mb-4">
+  {{#if adminOrgId}}<input type="hidden" name="orgId" value="{{adminOrgId}}" />{{/if}}
   <input type="text" name="q" value="{{query.q}}" placeholder="Search…"
     class="w-full max-w-sm rounded border border-gray-300 px-3 py-2 text-sm" />
 </form>
@@ -25,7 +26,7 @@
             <td class="px-4 py-2">{{cell this ../this}}</td>
           {{/each}}
           <td class="px-4 py-2 text-right">
-            <a href="/admin/{{../schema.key}}/{{this.id}}" class="{{#if this._readonly}}text-gray-500{{else}}text-blue-600{{/if}}">
+            <a href="/admin/{{../schema.key}}/{{this.id}}{{../adminQuery}}" class="{{#if this._readonly}}text-gray-500{{else}}text-blue-600{{/if}}">
               {{#if this._readonly}}View{{else}}Edit{{/if}}
             </a>
           </td>
@@ -39,8 +40,8 @@
 
 {{#if meta.totalPages}}
   <div class="flex items-center gap-2 mt-4 text-sm">
-    {{#if (gt meta.page 1)}}<a href="?page={{dec meta.page}}&q={{query.q}}" class="px-3 py-1 border rounded">Prev</a>{{/if}}
+    {{#if (gt meta.page 1)}}<a href="?page={{dec meta.page}}&q={{query.q}}{{#if adminOrgId}}&orgId={{adminOrgId}}{{/if}}" class="px-3 py-1 border rounded">Prev</a>{{/if}}
     <span class="text-gray-500">Page {{meta.page}} of {{meta.totalPages}} · {{meta.total}} total</span>
-    {{#if (lt meta.page meta.totalPages)}}<a href="?page={{inc meta.page}}&q={{query.q}}" class="px-3 py-1 border rounded">Next</a>{{/if}}
+    {{#if (lt meta.page meta.totalPages)}}<a href="?page={{inc meta.page}}&q={{query.q}}{{#if adminOrgId}}&orgId={{adminOrgId}}{{/if}}" class="px-3 py-1 border rounded">Next</a>{{/if}}
   </div>
 {{/if}}

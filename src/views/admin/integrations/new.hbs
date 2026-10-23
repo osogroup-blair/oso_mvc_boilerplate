@@ -20,6 +20,7 @@
     </div>
 
     <form method="POST" action="/admin/integrations" class="grid gap-4">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
       <input type="hidden" name="orgId" value="{{activeOrg.id}}">
       <input type="hidden" name="providerKey" value="{{selectedProvider.key}}">
 

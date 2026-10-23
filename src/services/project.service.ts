@@ -4,6 +4,7 @@ import { ProjectModel } from "../models/project.model.js";
 import { auditService, type AuditService } from "./audit.service.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
+import { randomUUID } from "node:crypto";
 
 export class ProjectService extends BaseService {
   constructor(
@@ -27,16 +28,8 @@ export class ProjectService extends BaseService {
     return found;
   }
 
-  async create(data: Prisma.ProjectCreateInput, actorId?: string) {
-    const created = await this.model.create(data);
-    await this.audit.record({
-      actorId,
-      action: "project.create",
-      entityType: "Project",
-      entityId: created.id,
-      changes: { after: created },
-    });
-    return created;
+  async create(data: Prisma.ProjectCreateInput, actorId?: string, operationId: string = randomUUID()) {
+    return this.model.createWithReceipt(data, actorId, operationId);
   }
 
   async update(id: string, data: Prisma.ProjectUpdateInput, actorId?: string) {

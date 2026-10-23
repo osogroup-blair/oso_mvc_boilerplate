@@ -14,12 +14,12 @@ fi
 
 # 2. Dependencies
 echo "▶ Installing dependencies..."
-npm install
+npm ci
 
 # 3. Database (Docker). Falls through with a warning if Docker is absent.
 if command -v docker >/dev/null 2>&1; then
   echo "▶ Starting Postgres via Docker..."
-  docker compose up -d db
+  docker compose -f docker-compose.yml -f compose.host.yml up -d db
   echo "  ⏳ waiting for Postgres to accept connections..."
   until docker compose exec -T db pg_isready -U boilerplate >/dev/null 2>&1; do
     sleep 1
@@ -31,7 +31,8 @@ fi
 
 # 4. Prisma: generate client, run migrations, seed
 echo "▶ Setting up database schema..."
-npm run db:migrate
+npx prisma generate
+npx prisma migrate deploy
 echo "▶ Seeding database..."
 npm run db:seed
 

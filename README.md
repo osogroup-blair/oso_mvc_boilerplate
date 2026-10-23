@@ -183,32 +183,41 @@ tests/            # Vitest suite for system validation
 
 ---
 
-## ⚡ Quick start (one command)
+## Quick start with Docker
 
-Prerequisites: **Node 20+** and **Docker** (for Postgres).
+Install Docker Engine or Docker Desktop with Compose v2. No host Node/npm or `.env` file is needed.
 
 ```bash
-npm run setup
+docker compose up --build -d --wait
 ```
 
-That single command will automatically:
-1. Copy `.env.example` → `.env`
-2. Install dependencies
-3. Start PostgreSQL in a Docker container
-4. Generate the Prisma client, run migrations, and seed demo data
-5. Build the CSS assets
-6. Start the local development server
+The first run builds the Linux application image, starts PostgreSQL, Redis, Temporal and Temporal UI, applies migrations and initializes demo data. The web app and Temporal Worker run in separate containers. Subsequent starts preserve edited data and uploads rather than reapplying demo seeds. Existing databases with users are not automatically seeded.
 
-Once setup is complete, open:
-* **Admin Dashboard:** [http://localhost:3000/admin](http://localhost:3000/admin)
-* **Users Management:** [http://localhost:3000/admin/user](http://localhost:3000/admin/user)
-* **Pages Admin (CMS):** [http://localhost:3000/admin/page](http://localhost:3000/admin/page)
-* **Public CMS page:** [http://localhost:3000/pages/welcome](http://localhost:3000/pages/welcome)
-* **Health check:** [http://localhost:3000/health](http://localhost:3000/health)
-* **REST API:** [http://localhost:3000/api/users](http://localhost:3000/api/users)
+- App: [http://localhost:3000](http://localhost:3000)
+- Admin: [http://localhost:3000/admin](http://localhost:3000/admin)
+- Demo admin: `alice@example.com` / `password123`
+- Temporal UI: [http://localhost:8244](http://localhost:8244)
 
-*No Docker? Point `DATABASE_URL` in `.env` to any active PostgreSQL instance, then run:*
-`npm install && npm run db:migrate && npm run db:seed && npm run dev`
+```bash
+docker compose ps                         # web/worker and dependencies should be healthy
+docker compose logs -f web worker initialize
+docker compose down                       # stop; retain databases and uploads
+docker compose up -d --wait                # start again
+```
+
+If a port is occupied, use `BOILERPLATE_HTTP_PORT=3100 BOILERPLATE_TEMPORAL_UI_PORT=8344 docker compose up --build -d --wait`. Use those same port values on later Compose commands. Set the `PUBLIC_APP_URL` site setting in admin when using a different app URL for task email links.
+
+Public uploads, private assets, database state and bootstrap state use named volumes. Only the app and Temporal UI bind to loopback host ports. Internal services use Compose DNS, keeping this stack separate from other locally running solutions. This is a local demo setup with development credentials; production follows the release/security gates in `docs/blueprint/LOCAL-OPERATIONS.md`.
+
+To verify a fresh installation plus persistence across down/up, run `npm run test:docker` after building the image. It creates a unique disposable Compose project, tests real login/CSRF and the Worker canary, and removes only its own test containers/volumes.
+
+### First-run implementation guide
+
+Fresh installations open an implementation landing page at `/`: fork/run instructions, a searchable feature toolkit, source/skill references, a first-resource walkthrough and a browser-local checklist. It stays available at `/getting-started` when you choose a product homepage under Settings → Identity → Home Page. Existing homepage selections are preserved; on an existing installation, choose the getting-started page in Settings to use the new guide as the homepage. The guide is code-owned in `src/services/getting-started.service.ts` and `src/views/pages/getting-started.hbs`; customize or unmount it before your public product launch.
+
+### Host development alternative
+
+With Node 24 and Docker installed, `npm run setup` retains the host development workflow: it creates `.env` if needed, installs locked dependencies, starts Postgres, deploys migrations, seeds demo data, builds CSS and runs the web watcher. `npm run temporal:up` and `npm run dev:temporal-worker` start Temporal and its host Worker separately. Run `docker compose -f docker-compose.yml -f compose.host.yml up -d db redis` to expose host development database/Redis ports. Avoid running this host-port override alongside another project already using those ports.
 
 ---
 
@@ -267,14 +276,14 @@ npm run dev
 npm run dev:temporal-worker
 ```
 
-Local ports:
+Host development ports (with `compose.host.yml`):
 
 | Service | Port |
 |---------|------|
 | App Postgres | 5436 |
 | Temporal Postgres | 5437 |
 | Temporal gRPC | 7243 |
-| Temporal UI | 8243 |
+| Temporal UI | 8244 |
 
 The `/health` endpoint reports database and Temporal connectivity. Temporal
 configuration lives in `.env` and is validated in `src/config/index.ts`;
@@ -284,11 +293,11 @@ email links use the `PUBLIC_APP_URL` site setting from `/admin/settings`.
 
 For the production hardening sequence, acceptance gates, known gaps, and
 another-agent handoff instructions, see
-[`TEMPORAL-PRODUCTION-ROADMAP.md`](./TEMPORAL-PRODUCTION-ROADMAP.md). The
+[`TEMPORAL-PRODUCTION-ROADMAP.md`](./docs/blueprint/TEMPORAL-PRODUCTION-ROADMAP.md). The
 operational procedures are in
 [`docs/temporal-operations-runbook.md`](./docs/temporal-operations-runbook.md).
 The executable test catalog for the integration plan and production roadmap is
-in [`TEMPORAL-TEST-CASES.md`](./TEMPORAL-TEST-CASES.md).
+in [`TEMPORAL-TEST-CASES.md`](./docs/testing/TEMPORAL-TEST-CASES.md).
 
 Operational admin surfaces:
 
@@ -385,3 +394,6 @@ As a portfolio and reference implementation, this project showcases:
 * **[`AGENTS.md`](./AGENTS.md)** — Core entry point and task mapping for coding agents.
 * **[`ARCHITECTURE.md`](./ARCHITECTURE.md)** — In-depth request lifecycle, annotated file mappings, and glossary.
 * **[`/skills`](./skills)** — Task-specific markdown guidelines for extending each layer of the application.
+
+
+October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.

@@ -330,3 +330,18 @@ refresh projection. Confirm no provider secrets appear in `stateSummary`.
 
 Do not add product workflow migrations or deep replay/versioning mechanics
 without an explicit implementation phase and replay/versioning plan.
+
+
+## October 20 blueprint contract update
+
+The current contracts and limits are in `docs/blueprint/EXTENSION-CONTRACTS.md`
+and `docs/blueprint/DECISIONS.md`. Models may own transactional command/receipt
+persistence while services own authorization/business policy. Private files
+require an explicit policy rather than a permissive singleton. General audit
+uses metadata only. Tenant admin adapters must resolve access before record or
+option reads and delegate CAS/receipt semantics to resource services/models.
+Existing self-hosted Temporal executions require reviewed prior histories
+before Workflow command changes; an empty corpus is a blocked release gate.
+
+
+October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.

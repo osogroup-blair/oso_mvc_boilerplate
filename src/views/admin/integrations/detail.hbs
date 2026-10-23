@@ -34,10 +34,12 @@
 
     <div class="mt-5 flex flex-wrap gap-3">
       <form method="POST" action="/admin/integrations/{{connection.id}}/test">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
         <input type="hidden" name="orgId" value="{{activeOrg.id}}">
         <button type="submit" class="rounded-md bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700">Test Connection</button>
       </form>
       <form method="POST" action="/admin/integrations/{{connection.id}}/disable">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
         <input type="hidden" name="orgId" value="{{activeOrg.id}}">
         <button type="submit" class="rounded-md border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">Disable</button>
       </form>
@@ -48,6 +50,7 @@
     <h2 class="text-lg font-semibold text-amber-950">Rotate Credentials</h2>
     <p class="mt-1 text-sm text-amber-800">Enter replacement credential values. Stored values are never displayed.</p>
     <form method="POST" action="/admin/integrations/{{connection.id}}/rotate" class="mt-4 grid gap-4">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
       <input type="hidden" name="orgId" value="{{activeOrg.id}}">
       {{#each provider.credentialForm.fields}}
         <label class="grid gap-1">

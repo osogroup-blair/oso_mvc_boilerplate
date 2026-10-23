@@ -102,3 +102,15 @@ IN from above, not reached UP for.
 
 ## Reference
 Any existing `user.*` file demonstrates every convention above.
+
+
+## October 20 blueprint contract update
+
+The current contracts and limits are in `docs/blueprint/EXTENSION-CONTRACTS.md`
+and `docs/blueprint/DECISIONS.md`. Models may own transactional command/receipt
+persistence while services own authorization/business policy. Private files
+require an explicit policy rather than a permissive singleton. General audit
+uses metadata only. Tenant admin adapters must resolve access before record or
+option reads and delegate CAS/receipt semantics to resource services/models.
+Existing self-hosted Temporal executions require reviewed prior histories
+before Workflow command changes; an empty corpus is a blocked release gate.

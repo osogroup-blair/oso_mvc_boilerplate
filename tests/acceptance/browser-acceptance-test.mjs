@@ -1,9 +1,7 @@
-const base = "http://127.0.0.1:3000";
-let pageTargetResponse = await fetch("http://127.0.0.1:9224/json/new?about:blank", { method: "PUT" });
-if (!pageTargetResponse.ok) {
-  const targets = await fetch("http://127.0.0.1:9224/json/list").then((r) => r.json());
-  pageTargetResponse = { ok: true, json: async () => targets.find((target) => target.type === "page") };
-}
+import { requireOwnedAcceptance } from "./owned-runtime.mjs";
+const { base, browserBase } = await requireOwnedAcceptance(true);
+const pageTargetResponse = await fetch(`${browserBase}/json/new?about:blank`, { method: "PUT" });
+if (!pageTargetResponse.ok) throw Error("Cannot create a fresh owned browser tab");
 const pageTarget = await pageTargetResponse.json();
 const ws = new WebSocket(pageTarget.webSocketDebuggerUrl);
 let nextId = 1;
@@ -93,7 +91,7 @@ const health = JSON.parse(healthPage.text);
 record("Health endpoint returns success/db up JSON envelope", health.success === true && health.data.status === "up" && health.data.db === "up", { observed: health });
 
 const home = await navigate("/");
-record("Public home page renders seeded CMS content", home.text.includes("Built to be extended") || home.text.includes("Welcome to the boilerplate"), { url: home.href, excerpt: home.text.slice(0, 220) });
+record("Public home page renders implementation guide", home.text.includes("Skip the setup.") && home.text.includes("Build your thing."), { url: home.href, excerpt: home.text.slice(0, 220) });
 
 const cms = await navigate("/pages/welcome");
 record("CMS page renders JSON content blocks", cms.text.includes("Built to be extended") && cms.text.includes("How it works"), { url: cms.href, excerpt: cms.text.slice(0, 220) });

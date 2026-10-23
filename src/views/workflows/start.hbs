@@ -34,6 +34,7 @@
   <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
     <h2 class="text-lg font-semibold text-gray-900">Start Workflow</h2>
     <form method="POST" action="/workflows/{{definition.slug}}/start" class="mt-5 grid gap-4">
+      <input type="hidden" name="operationId" value="{{operationId}}">
       <input type="hidden" name="orgId" value="{{activeOrg.id}}">
       <input type="hidden" name="_csrf" value="{{csrfToken}}">
 

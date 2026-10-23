@@ -1,3 +1,29 @@
+# Local development stack. No host Node/npm or .env file required.
+x-application: &application
+  image: mvc-boilerplate:local
+  build:
+    context: .
+  init: true
+  environment: &application-environment
+    NODE_ENV: development
+    PORT: "3000"
+    LOG_LEVEL: info
+    DATABASE_URL: postgresql://boilerplate:boilerplate@db:5432/boilerplate?schema=public
+    REDIS_URL: redis://redis:6379
+    JWT_SECRET: local-demo-only-change-before-deployment-00000000
+    TEMPORAL_ADDRESS: temporal:7233
+    TEMPORAL_NAMESPACE: default
+    TEMPORAL_TASK_QUEUE: boilerplate-local
+    TEMPORAL_UI_BASE_URL: http://localhost:${BOILERPLATE_TEMPORAL_UI_PORT:-8244}
+    TEMPORAL_TLS_ENABLED: "false"
+    TEMPORAL_PAYLOAD_ENCRYPTION_ENABLED: "true"
+    TEMPORAL_ALLOW_LEGACY_PLAINTEXT: "true"
+    INTEGRATION_CREDENTIAL_KEY_VERSION: dev-v1
+    INTEGRATION_CREDENTIAL_KEY: dev-only-integration-credential-key-00000000
+    PRIVATE_ASSET_ROOT: /app/var/private-assets
+    PRIVATE_ASSET_STORE_ID: local-private-v1
+  stop_grace_period: 60s
+
 services:
   db:
     image: postgres:16-alpine
@@ -6,8 +32,6 @@ services:
       POSTGRES_USER: boilerplate
       POSTGRES_PASSWORD: boilerplate
       POSTGRES_DB: boilerplate
-    ports:
-      - "5436:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +43,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6380:6379"
     volumes:
       - redisdata:/data
     healthcheck:
@@ -36,8 +58,6 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: temporal
       POSTGRES_DB: temporal
-    ports:
-      - "5437:5432"
     volumes:
       - temporal_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -58,8 +78,6 @@ services:
       POSTGRES_USER: temporal
       POSTGRES_PWD: temporal
       POSTGRES_SEEDS: temporal-postgres
-    ports:
-      - "7243:7233"
     healthcheck:
       test: ["CMD", "tctl", "--address", "temporal:7233", "cluster", "health"]
       interval: 5s
@@ -74,11 +92,73 @@ services:
         condition: service_healthy
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+      TEMPORAL_CORS_ORIGINS: http://localhost:${BOILERPLATE_HTTP_PORT:-3000}
     ports:
-      - "8243:8080"
+      - "127.0.0.1:${BOILERPLATE_TEMPORAL_UI_PORT:-8244}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://127.0.0.1:8080/"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  initialize:
+    <<: *application
+    restart: "no"
+    command: ["node", "scripts/docker-initialize.mjs"]
+    environment:
+      <<: *application-environment
+      BOOTSTRAP_DEMO_DATA: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - bootstrap_data:/app/var/bootstrap
+
+  web:
+    <<: *application
+    restart: unless-stopped
+    command: ["node", "dist/server.js"]
+    ports:
+      - "127.0.0.1:${BOILERPLATE_HTTP_PORT:-3000}:3000"
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      temporal:
+        condition: service_healthy
+    volumes:
+      - public_uploads:/app/public/uploads
+      - private_assets:/app/var/private-assets
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(async r=>{if(!r.ok||(await r.json()).data.status!=='up')process.exit(1)}).catch(()=>process.exit(1))"]
+      start_period: 30s
+      interval: 15s
+      timeout: 10s
+      retries: 10
+
+  worker:
+    <<: *application
+    restart: unless-stopped
+    command: ["node", "dist/temporal/worker.js"]
+    depends_on:
+      initialize:
+        condition: service_completed_successfully
+      temporal:
+        condition: service_healthy
+    volumes:
+      - private_assets:/app/var/private-assets
+    healthcheck:
+      test: ["CMD", "node", "scripts/temporal-canary.mjs"]
+      start_period: 45s
+      interval: 30s
+      timeout: 15s
+      retries: 5
 
 volumes:
   pgdata:
   redisdata:
   temporal_pgdata:
+  public_uploads:
+  private_assets:
+  bootstrap_data:

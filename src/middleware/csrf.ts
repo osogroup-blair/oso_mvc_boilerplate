@@ -29,7 +29,9 @@ function makeToken() {
 
 function isValid(token: string | undefined) {
   if (!token) return false;
-  const [nonce, mac] = token.split(".");
+  const parts = token.split(".");
+  if (parts.length !== 2) return false;
+  const [nonce, mac] = parts;
   if (!nonce || !mac) return false;
   const expected = sign(nonce);
   const left = Buffer.from(mac);
@@ -53,7 +55,9 @@ export function ensureCsrfToken(req: Request, res: Response, next: NextFunction)
 
 export function verifyCsrfToken(req: Request, res: Response, next: NextFunction) {
   const cookies = parseCookies(req.headers.cookie);
-  const bodyToken = typeof req.body?._csrf === "string" ? req.body._csrf : undefined;
+  const bodyToken = typeof req.body?._csrf === "string" ? req.body._csrf
+    : typeof req.headers["x-csrf-token"] === "string" ? req.headers["x-csrf-token"]
+      : typeof req.headers["x-xsrf-token"] === "string" ? req.headers["x-xsrf-token"] : undefined;
   const cookieToken = cookies[COOKIE_NAME];
 
   if (!isValid(cookieToken) || !bodyToken || bodyToken !== cookieToken) {
@@ -62,4 +66,18 @@ export function verifyCsrfToken(req: Request, res: Response, next: NextFunction)
 
   res.locals.csrfToken = cookieToken;
   next();
+}
+
+/** Bull Board's Axios client reads its standard same-origin XSRF cookie. */
+export function exposeQueueCsrf(_req: Request, res: Response, next: NextFunction) {
+  res.cookie("XSRF-TOKEN", res.locals.csrfToken, { httpOnly: false, secure: config.isProd, sameSite: "lax", path: "/admin/jobs" });
+  next();
+}
+
+/** Cookie browser mutations require CSRF. Token-only APIs must still authenticate. */
+export function verifyBrowserMutation(req: Request, res: Response, next: NextFunction) {
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) return next();
+  const cookies = parseCookies(req.headers.cookie);
+  if (!cookies.session && /^Bearer\s+\S+$/i.test(req.headers.authorization ?? "")) return next();
+  return verifyCsrfToken(req, res, next);
 }

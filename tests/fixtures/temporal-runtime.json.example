@@ -1,0 +1,27 @@
+{
+  "owner": "mvc-boilerplate-platform-tests",
+  "runId": "771ca5be-6507-40ef-b781-aecbcad883ad",
+  "database": {
+    "host": "127.0.0.1",
+    "port": 55439,
+    "name": "bp_platform_771ca5be650740efb781aecbcad883ad"
+  },
+  "temporal": {
+    "host": "127.0.0.1",
+    "port": 17243,
+    "namespace": "bp-platform-771ca5be-6507-40ef-b781-aecbcad883ad",
+    "taskQueue": "bp-platform-771ca5be-6507-40ef-b781-aecbcad883ad"
+  },
+  "redis": {
+    "host": "127.0.0.1",
+    "port": 16379,
+    "database": 14
+  },
+  "mail": {
+    "host": "127.0.0.1",
+    "port": 11025
+  },
+  "appPort": 13119,
+  "browserPort": 19225,
+  "artifactDirectory": "/tmp/platform-771ca5be-6507-40ef-b781-aecbcad883ad"
+}

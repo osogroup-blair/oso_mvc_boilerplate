@@ -53,6 +53,7 @@
           </td>
           <td class="px-6 py-4 text-right">
             <form action="/admin/sessions/{{this.id}}/logout" method="POST" class="inline m-0" onsubmit="return confirm('Are you sure you want to log this user session out?');">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
               <button type="submit" class="bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 px-3 py-1.5 rounded text-xs font-semibold border border-red-200 transition-colors">
                 Log Out
               </button>

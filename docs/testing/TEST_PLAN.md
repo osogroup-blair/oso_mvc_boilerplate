@@ -162,7 +162,7 @@ If this repository was previously bootstrapped with `prisma db push`, the databa
 - Migrated showcase/standalone workflows should register generic start/action forms, state summaries, role policy, and integration requirements before adding bespoke routes or templates.
 - AI/file workflow smoke should confirm Workflow input, signal payloads, state summaries, and audit/browser payloads use safe references or structured summaries rather than raw documents, prompts, full transcripts, credentials, or unredacted tool payloads.
 
-## Pass Criteria
+## Historical browser-smoke pass criteria
 The boilerplate is accepted when preflight commands pass, browser smoke tests complete without visible runtime errors, seeded admin login works, representative public/admin pages render, API envelopes are correct, and production build includes runtime templates.
 
 
@@ -171,3 +171,16 @@ Reusable end-to-end and smoke tests live under 	ests/acceptance/. These are test
 
 
 
+
+
+## October 20, 2026 implementation status
+
+See `docs/blueprint/EXTENSION-CONTRACTS.md` for the current test ownership,
+CSRF, metadata-only audit, atomic command, private-file, tenant-admin, Worker,
+transport and release-bundle contracts. `docs/blueprint/DECISIONS.md` records
+compatibility and rollback constraints. The execution checklist (`docs/blueprint/EXECUTION-CHECKLIST-2026-10-20.md`) separates
+source, component, runtime and acceptance status. Historical test narratives
+above are not evidence that the current release is production-accepted.
+
+
+Current end-to-end local entrypoint: `npm run test:local:all`. Provision explicit fixture images and Playwright/Chromium as described in `docs/blueprint/LOCAL-OPERATIONS.md`. Each run uses new ownership-checked endpoints, PostgreSQL sentinel, Temporal namespace/queue and Chromium profile. Release compatibility must additionally pass the reviewed deployed-history corpus against the exact bundle; an empty corpus blocks release.

@@ -65,6 +65,24 @@ export class WorkflowOperationsAdminController {
     }
   }
 
+  async canary(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user?.roleId) throw AppError.unauthorized("Authentication required");
+      const query = orgQuerySchema.parse(req.body);
+      const result = await workflowOperationsService.canary({ userId: req.user.id, roleId: req.user.roleId }, query.orgId);
+      res.redirect(`/admin/workflow-operations?orgId=${encodeURIComponent(result.activeOrg.id)}&canary=${result.status}`);
+    } catch (err) { next(err); }
+  }
+
+  async recoverStarts(req: Request, res: Response, next: NextFunction) {
+    try {
+      if (!req.user?.roleId) throw AppError.unauthorized("Authentication required");
+      const query = orgQuerySchema.parse(req.body);
+      const result = await workflowOperationsService.recoverStarts({ userId: req.user.id, roleId: req.user.roleId }, query.orgId);
+      res.redirect(`/admin/workflow-operations?orgId=${encodeURIComponent(result.activeOrg.id)}&recovered=${result.results.length}`);
+    } catch (err) { next(err); }
+  }
+
   async reconcile(req: Request, res: Response, next: NextFunction) {
     try {
       if (!req.user?.roleId) throw AppError.unauthorized("Authentication required");

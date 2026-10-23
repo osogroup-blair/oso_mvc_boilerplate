@@ -3,6 +3,8 @@
 // renders any object by walking these field definitions.
 // See skills/SKILL-admin.md.
 
+import type { AdminResourceAdapter } from "./resource.types.js";
+
 export type FieldType =
   | "text"
   | "password"
@@ -63,6 +65,8 @@ export interface AdminSchema {
   listColumns: string[];
   category: "system" | "application";
   fields: FieldDef[];
+  fieldsForRecord?: (record: Record<string, unknown>) => FieldDef[];
+  adapter?: AdminResourceAdapter;
   
   // Optional callback to determine if a specific record is read-only
   isRecordReadonly?: (record: any) => boolean;

@@ -1,3 +1,4 @@
+import { allowedRoleNames } from "../lib/pageAccess.js";
 import type { Request, Response, NextFunction } from "express";
 import { navigationItemService } from "../services/navigationItem.service.js";
 import { pageService } from "../services/page.service.js";
@@ -28,7 +29,7 @@ export async function injectNavigation(_req: Request, res: Response, next: NextF
           const slug = item.url.replace("/pages/", "");
           const page = await pageService.getPublishedBySlug(slug);
           if (page) {
-            const allowedRoles = (page as any).allowedRoles as string[] ?? [];
+            const allowedRoles = allowedRoleNames(page.allowedRoles);
             if (allowedRoles.length > 0) {
               if (!user || !allowedRoles.includes(user.role)) {
                 isAllowed = false;

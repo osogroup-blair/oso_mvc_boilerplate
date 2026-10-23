@@ -1,0 +1,12 @@
+import { initRedis, initQueues } from "../../dist/lib/queue.js";
+import { createApp } from "../../dist/app.js";
+import { register } from "../../dist/admin/schema.registry.js";
+import { referenceSchemas } from "./reference.service.mjs";
+import { syncAppPages } from "../../dist/lib/pageSync.js";
+import { syncAppRoutes } from "../../dist/lib/routeSync.js";
+import { syncWorkflowDefinitions } from "../../dist/lib/workflowSync.js";
+for(const schema of await referenceSchemas())register(schema);
+await syncAppPages();await syncAppRoutes();await syncWorkflowDefinitions();
+await initRedis();initQueues();
+const server=createApp().listen(Number(process.env.PORT),"127.0.0.1");
+process.on("SIGTERM",()=>server.close(()=>process.exit(0)));

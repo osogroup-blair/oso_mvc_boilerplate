@@ -1,5 +1,7 @@
 import { WorkflowCapability, WorkflowExecutionStatus, type Prisma } from "@prisma/client";
 import { randomUUID } from "crypto";
+import { stableHash } from "../lib/stable-hash.js";
+import { sealIntent, openIntent } from "../lib/temporalPayload.js";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import {
@@ -49,6 +51,7 @@ export interface StartWorkflowInput {
   slug: string;
   orgId?: string;
   input: unknown;
+  operationId?: string;
 }
 
 export interface EnsureWorkflowExecutionProjectionInput {
@@ -58,6 +61,7 @@ export interface EnsureWorkflowExecutionProjectionInput {
   workflowId: string;
   runId?: string;
   scheduleId?: string;
+  actionProtocol?: string;
   input: unknown;
 }
 
@@ -89,6 +93,7 @@ export class WorkflowExecutionService extends BaseService {
 
     return {
       ...context,
+      operationId: randomUUID(),
       definition,
       registration,
       integrationStatuses,
@@ -124,111 +129,46 @@ export class WorkflowExecutionService extends BaseService {
     const integrationStatuses = await this.integrations.getRequirementStatuses(context.activeOrg.id, definition);
     this.integrations.assertRequiredBindingsAvailable(integrationStatuses);
     const businessKey = this.extractBusinessKey(validatedInput);
-    const workflowId = this.buildWorkflowId(context.activeOrg.id, definition.key, businessKey);
+    const workflowId = this.buildWorkflowId(context.activeOrg.id, definition.key, businessKey ?? input.operationId);
+    const requestHash = stableHash({input:validatedInput,actor:actor.userId,definition:definition.id});
+    if(Buffer.byteLength(JSON.stringify(validatedInput))>131072)throw AppError.badRequest("Workflow input exceeds 128 KiB");
+    const args=[validatedInput,{orgId:context.activeOrg.id,startedById:actor.userId,workflowDefinitionKey:definition.key,actionProtocol:"update-v1"}];
+    const intent=await this.executions.reserveStart({workflowId,orgId:context.activeOrg.id,workflowDefinitionId:definition.id,startedById:actor.userId,requestHash,
+      envelope:await sealIntent({workflowType:definition.workflowType,taskQueue:definition.defaultTaskQueue,args,businessKey,inputSummary:this.summarizeInput(registration,validatedInput)})});
+    if(intent.deletedAt || intent.orgId!==context.activeOrg.id || intent.startedById!==actor.userId || intent.workflowDefinitionId!==definition.id || intent.requestHash!==requestHash)throw AppError.conflict("Workflow start identity belongs to different input or actor");
+    return this.recoverIntent(intent);
+  }
 
-    const existing = await this.executions.findByWorkflowIdInOrg(workflowId, context.activeOrg.id);
-    if (existing && !TERMINAL_STATUSES.has(existing.status)) {
-      throw AppError.conflict("A workflow execution already exists for this business key");
+  private async recoverIntent(intent: Awaited<ReturnType<WorkflowExecutionModel["reserveStart"]>>) {
+    const stored=await openIntent(intent.envelope);
+    const started=await this.temporal.startWorkflow({workflowType:stored.workflowType,taskQueue:stored.taskQueue,workflowId:intent.workflowId,requestHash:intent.requestHash,args:stored.args});
+    const {execution}=await this.executions.createOrFind({orgId:intent.orgId,workflowDefinitionId:intent.workflowDefinitionId,startedById:intent.startedById,
+      workflowId:started.workflowId,runId:started.runId,businessKey:stored.businessKey,status:WorkflowExecutionStatus.RUNNING,inputSummary:stored.inputSummary,
+      actionProtocol:"update-v1",stateSummary:{},startedAt:new Date(),lastSyncedAt:new Date()});
+    return execution;
+  }
+
+  async recoverPendingStarts(actor: WorkflowActor, orgId?:string) {
+    const context=await this.requireActiveOrg(actor.userId,orgId);await this.assertGlobalPermission(actor.roleId,"start");
+    const pending=await this.executions.listPendingIntents(context.activeOrg.id);
+    const results=[];
+    for(const intent of pending) {
+      if(intent.startedById!==actor.userId)continue;
+      const stored=await openIntent(intent.envelope);
+      const definition=await this.catalog.getByKey(stored.args[1].workflowDefinitionKey);
+      if(!definition.isEnabled)continue;
+      this.assertDefinitionCapability(definition,actor.roleId,[WorkflowCapability.START]);
+      results.push(await this.recoverIntent(intent));
     }
-    if (existing) {
-      throw AppError.conflict("Workflow execution IDs are not reused by the application projection");
-    }
-
-    const started = await this.temporal.startWorkflow({
-      workflowType: definition.workflowType,
-      taskQueue: definition.defaultTaskQueue,
-      workflowId,
-      args: [
-        validatedInput,
-        {
-          orgId: context.activeOrg.id,
-          startedById: actor.userId,
-          workflowDefinitionKey: definition.key,
-        },
-      ],
-    });
-
-    const created = await this.executions.create({
-      orgId: context.activeOrg.id,
-      workflowDefinitionId: definition.id,
-      startedById: actor.userId,
-      workflowId: started.workflowId,
-      runId: started.runId,
-      businessKey,
-      status: WorkflowExecutionStatus.RUNNING,
-      inputSummary: this.summarizeInput(registration, validatedInput),
-      stateSummary: {},
-      startedAt: new Date(),
-    });
-
-    await this.audit.record({
-      actorId: actor.userId,
-      action: "workflowExecution.start",
-      entityType: "WorkflowExecution",
-      entityId: created.id,
-      changes: {
-        after: {
-          orgId: context.activeOrg.id,
-          workflowDefinitionId: definition.id,
-          workflowId: started.workflowId,
-          runId: started.runId,
-          businessKey,
-        },
-      },
-    });
-
-    return created;
+    return results;
   }
 
   async ensureStartedProjection(input: EnsureWorkflowExecutionProjectionInput) {
-    const existing = await this.executions.findByWorkflowIdInOrg(input.workflowId, input.orgId);
-    if (existing) return { execution: existing, created: false };
-
-    const definition = await this.catalog.getByKey(input.workflowDefinitionKey);
-    const registration = this.getRegistration(definition.key);
-    const validatedInput = registration.validateStart(input.input);
-    const businessKey = this.extractBusinessKey(validatedInput);
-
-    try {
-      const created = await this.executions.create({
-        orgId: input.orgId,
-        workflowDefinitionId: definition.id,
-        startedById: input.startedById,
-        workflowId: input.workflowId,
-        runId: input.runId,
-        businessKey,
-        status: WorkflowExecutionStatus.RUNNING,
-        inputSummary: this.summarizeProjectionInput(registration, validatedInput, input.scheduleId),
-        stateSummary: {},
-        startedAt: new Date(),
-        lastSyncedAt: new Date(),
-      });
-
-      await this.audit.record({
-        actorId: input.startedById,
-        action: input.scheduleId ? "workflowExecution.ingestScheduledStart" : "workflowExecution.ingestStart",
-        entityType: "WorkflowExecution",
-        entityId: created.id,
-        changes: {
-          after: {
-            orgId: input.orgId,
-            workflowDefinitionId: definition.id,
-            workflowId: input.workflowId,
-            runId: input.runId,
-            businessKey,
-            scheduleId: input.scheduleId ?? null,
-          },
-        },
-      });
-
-      return { execution: created, created: true };
-    } catch (err) {
-      if (this.isUniqueConstraintError(err)) {
-        const raced = await this.executions.findByWorkflowIdInOrg(input.workflowId, input.orgId);
-        if (raced) return { execution: raced, created: false };
-      }
-      throw err;
-    }
+    const definition=await this.catalog.getByKey(input.workflowDefinitionKey); const registration=this.getRegistration(definition.key);
+    const validated=registration.validateStart(input.input);
+    return this.executions.createOrFind({orgId:input.orgId,workflowDefinitionId:definition.id,startedById:input.startedById,workflowId:input.workflowId,
+      runId:input.runId,businessKey:this.extractBusinessKey(validated),status:WorkflowExecutionStatus.RUNNING,inputSummary:this.summarizeProjectionInput(registration,validated,input.scheduleId),
+      actionProtocol:input.actionProtocol ?? "signal-v1",stateSummary:{},startedAt:new Date(),lastSyncedAt:new Date()});
   }
 
   async getDetail(actor: WorkflowActor, id: string, orgId?: string) {
@@ -264,7 +204,7 @@ export class WorkflowExecutionService extends BaseService {
     }
 
     await this.temporal.cancelWorkflow(execution.workflowId, execution.runId ?? undefined);
-    const updated = await this.executions.updateStatus(execution.id, WorkflowExecutionStatus.CANCELED);
+    const updated = await this.executions.update(execution.id, { stateSummary: { cancelRequested: true } });
 
     await this.audit.record({
       actorId: actor.userId,
@@ -273,7 +213,7 @@ export class WorkflowExecutionService extends BaseService {
       entityId: execution.id,
       changes: {
         before: { status: execution.status },
-        after: { status: WorkflowExecutionStatus.CANCELED },
+        after: { status: execution.status, code:"CANCELLATION_REQUESTED" },
       },
     });
 
@@ -289,6 +229,12 @@ export class WorkflowExecutionService extends BaseService {
 
     const describe = await this.temporal.describeWorkflow(execution.workflowId, execution.runId ?? undefined);
     const status = this.mapTemporalStatus(describe);
+    let businessOutcome="UNKNOWN";
+    let syncErrorCode:string|null=null;
+    if(status===WorkflowExecutionStatus.COMPLETED) {
+      const result=await this.temporal.workflowResult(execution.workflowId,execution.runId ?? undefined) as {businessOutcome?:string}|null;
+      if(result && ["SUCCEEDED","REJECTED","CANCELLED","UNKNOWN"].includes(result.businessOutcome ?? ""))businessOutcome=result.businessOutcome!;
+    } else if(status===WorkflowExecutionStatus.CANCELED)businessOutcome="CANCELLED";
     let stateSummary: Prisma.InputJsonValue = execution.stateSummary as Prisma.InputJsonValue;
 
     if (registration.stateQuery) {
@@ -300,12 +246,13 @@ export class WorkflowExecutionService extends BaseService {
         );
         stateSummary = registration.summarizeState(state) as Prisma.InputJsonObject;
       } catch (err) {
+        syncErrorCode="STATE_QUERY_UNAVAILABLE";
         this.log.warn({ err, workflowId: execution.workflowId }, "Workflow state query failed during refresh");
       }
     }
 
     return this.executions.updateStatus(execution.id, status, {
-      stateSummary,
+      stateSummary, businessOutcome, syncErrorCode,
       completedAt: TERMINAL_STATUSES.has(status) ? describe.closeTime ?? new Date() : null,
     });
   }
@@ -420,14 +367,7 @@ export class WorkflowExecutionService extends BaseService {
     }
   }
 
-  private isUniqueConstraintError(err: unknown) {
-    return (
-      typeof err === "object" &&
-      err !== null &&
-      "code" in err &&
-      (err as { code?: unknown }).code === "P2002"
-    );
-  }
+
 }
 
 export const workflowExecutionService = new WorkflowExecutionService();

@@ -140,6 +140,7 @@ export class WorkflowScheduleService extends BaseService {
           orgId: context.activeOrg.id,
           startedById: actor.userId,
           workflowDefinitionKey: definition.key,
+          actionProtocol: "update-v1",
           scheduleId,
         },
       ],

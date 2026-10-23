@@ -21,13 +21,12 @@ export function errorHandler(
   } else if (err instanceof ZodError) {
     appError = AppError.badRequest("Validation failed", err.flatten().fieldErrors);
   } else {
-    // Unknown/unexpected error → log full detail, return generic 500.
-    logger.error({ err, reqId: req.id }, "Unhandled error");
+    // Errors may embed provider inputs, tokens or private document content.
     appError = new AppError("Internal server error", 500, "INTERNAL_ERROR");
   }
 
   if (appError.statusCode >= 500) {
-    logger.error({ err, reqId: req.id }, appError.message);
+    logger.error({ code: appError.code, reqId: req.id }, "Request failed");
   }
 
   const wantsJson = req.accepts(["html", "json"]) === "json" || req.path.startsWith("/api");

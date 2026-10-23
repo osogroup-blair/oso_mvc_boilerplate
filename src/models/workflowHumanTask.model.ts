@@ -4,6 +4,8 @@ import {
   WorkflowHumanTaskStatus,
   type WorkflowActionChannel,
 } from "@prisma/client";
+import { AppError } from "../lib/AppError.js";
+import { safeAuditEntry } from "../lib/audit-policy.js";
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
 
@@ -147,12 +149,56 @@ export class WorkflowHumanTaskModel extends BaseModel {
     actorUserId?: string;
     tokenId?: string;
     requestHash: string;
+    result?: Prisma.InputJsonValue;
   }) {
-    return this.db.workflowActionReceipt.create({
-      data: {
-        ...data,
-        status: WorkflowActionReceiptStatus.RECEIVED,
-      },
+    return this.db.$transaction(async (tx) => {
+      const receipt = await tx.workflowActionReceipt.create({ data: { ...data, status: WorkflowActionReceiptStatus.RECEIVED } });
+      // One logical action owns the task across different browser idempotency keys.
+      const claimed = await tx.workflowHumanTask.updateMany({
+        where: { id: data.taskId, orgId: data.orgId, status: WorkflowHumanTaskStatus.OPEN, deliveryReceiptId: null, deletedAt: null },
+        data: { deliveryReceiptId: receipt.id },
+      });
+      if (!claimed.count) throw AppError.conflict("Workflow task already has a pending response");
+      return receipt;
+    });
+  }
+
+  rejectDelivery(taskId: string, receiptId: string) {
+    return this.db.$transaction(async tx => {
+      await tx.workflowActionReceipt.update({ where: { id: receiptId, taskId, status: WorkflowActionReceiptStatus.RECEIVED },
+        data: { status: WorkflowActionReceiptStatus.FAILED, error: { code: "WORKFLOW_ACTION_REJECTED" } } });
+      await tx.workflowHumanTask.updateMany({ where: { id: taskId, deliveryReceiptId: receiptId, status: WorkflowHumanTaskStatus.OPEN, deletedAt: null },
+        data: { deliveryReceiptId: null } });
+      await tx.auditLog.create({ data: { action: "workflowHumanTask.deliveryRejected", entityType: "WorkflowHumanTask", entityId: taskId,
+        changes: { after: { operationId: receiptId, code: "WORKFLOW_ACTION_REJECTED" } } } });
+    });
+  }
+
+  commitDelivery(input: { taskId: string; receiptId: string; result: Prisma.InputJsonObject;
+    tokenId?: string; audit: Prisma.AuditLogUncheckedCreateInput }) {
+    return this.db.$transaction(async (tx) => {
+      const existing = await tx.workflowActionReceipt.findFirstOrThrow({ where: { id: input.receiptId, taskId: input.taskId, deletedAt: null } });
+      if (existing.status === WorkflowActionReceiptStatus.SUCCEEDED) {
+        const task = await tx.workflowHumanTask.findFirstOrThrow({ where: { id: input.taskId, deletedAt: null }, include: this.detailInclude() });
+        return { task, receipt: existing };
+      }
+      await tx.workflowHumanTask.updateMany({
+        where: { id: input.taskId, deliveryReceiptId: input.receiptId, status: WorkflowHumanTaskStatus.OPEN, deletedAt: null },
+        data: { deliveryStatus: "QUEUED" },
+      });
+      const task = await tx.workflowHumanTask.findFirstOrThrow({
+        where: { id: input.taskId, deliveryReceiptId: input.receiptId, deletedAt: null }, include: this.detailInclude(),
+      });
+      const receipt = await tx.workflowActionReceipt.update({
+        where: { id: input.receiptId, taskId: input.taskId, deletedAt: null },
+        data: { status: WorkflowActionReceiptStatus.SUCCEEDED, result: input.result },
+      });
+      if (input.tokenId) await tx.workflowTaskToken.update({
+        where: { id: input.tokenId, taskId: input.taskId, revokedAt: null, expiresAt: {gt: new Date()}, deletedAt: null }, data: { consumedAt: new Date() },
+      });
+      // Stable audit ID makes commit retries idempotent as well.
+      await tx.auditLog.upsert({ where: { id: input.receiptId }, update: {}, create: { ...safeAuditEntry(input.audit as never), id: input.receiptId, changes: safeAuditEntry(input.audit as never).changes as Prisma.InputJsonObject } });
+      return { task, receipt };
     });
   }
 
@@ -162,6 +208,12 @@ export class WorkflowHumanTaskModel extends BaseModel {
       data,
     });
   }
+
+  cancelOpenWorkflowTasks(input: {orgId:string;workflowId:string;runId:string}) {
+    return this.db.workflowHumanTask.updateMany({where:{orgId:input.orgId,workflowId:input.workflowId,runId:input.runId,status:WorkflowHumanTaskStatus.OPEN,deletedAt:null},
+      data:{status:WorkflowHumanTaskStatus.CANCELED,closedAt:new Date()}});
+  }
+  isActiveMember(userId:string,orgId:string) { return this.db.orgMember.findFirst({where:{userId,orgId,deletedAt:null,user:{isActive:true,deletedAt:null},org:{deletedAt:null}}}); }
 
   private visibleForUserWhere(orgId: string, userId: string, roleId: string, search?: string): Prisma.WorkflowHumanTaskWhereInput {
     return {

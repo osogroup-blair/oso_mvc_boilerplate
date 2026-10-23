@@ -373,12 +373,46 @@ model Asset {
 
 // ─── Multi-Tenancy ─────────────────────────────────────────────────
 
+enum PrivateAssetState {
+  PENDING
+  READY
+  DELETING
+  DELETED
+}
+
+// Separate from public Asset: no URL and no public-library entry point.
+model PrivateAsset {
+  id           String            @id @default(uuid())
+  orgId        String
+  organization Organization      @relation(fields: [orgId], references: [id])
+  resourceType String
+  resourceId   String
+  operationId  String
+  filename     String
+  mimeType     String
+  size         Int
+  sha256       String
+  key          String            @unique
+  backend      String
+  state        PrivateAssetState @default(PENDING)
+  actorId      String
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  deletedAt    DateTime?
+
+  @@index([orgId, resourceType, resourceId, state])
+  @@unique([orgId, resourceType, resourceId, operationId])
+  @@index([state, updatedAt])
+  @@index([deletedAt])
+}
+
 model Organization {
   id                          String                       @id @default(uuid())
   name                        String
   slug                        String                       @unique
   logoUrl                     String?
   members                     OrgMember[]
+  privateAssets               PrivateAsset[]
   workflowExecutions          WorkflowExecution[]
   workflowHumanTasks          WorkflowHumanTask[]
   workflowActionReceipts      WorkflowActionReceipt[]
@@ -550,6 +584,8 @@ model ActivityIdempotency {
   idempotencyKey String
   status         ActivityIdempotencyStatus @default(RECEIVED)
   requestHash    String
+  attempt        Int @default(1)
+  providerReceiptId String?
   response       Json?
   error          Json?
   lockedAt       DateTime?
@@ -584,6 +620,8 @@ enum ActivityIdempotencyStatus {
   RECEIVED
   RUNNING
   SUCCEEDED
+  RETRYABLE
+  UNCERTAIN
   FAILED
 }
 
@@ -656,6 +694,9 @@ model WorkflowExecution {
   startedBy            User                    @relation(fields: [startedById], references: [id])
   workflowId           String                  @unique
   runId                String?
+  actionProtocol       String @default("signal-v1")
+  businessOutcome      String @default("UNKNOWN")
+  syncErrorCode        String?
   businessKey          String?
   status               WorkflowExecutionStatus @default(PENDING)
   inputSummary         Json                    @default("{}")
@@ -690,6 +731,23 @@ enum WorkflowExecutionStatus {
   UNKNOWN
 }
 
+model WorkflowStartIntent {
+  id String @id @default(uuid())
+  workflowId String @unique
+  orgId String
+  workflowDefinitionId String
+  startedById String
+  requestHash String
+  envelope Json
+  state String @default("PENDING")
+  runId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  deletedAt DateTime?
+  @@index([orgId, state])
+  @@index([deletedAt])
+}
+
 model WorkflowHumanTask {
   id                  String                  @id @default(uuid())
   orgId               String
@@ -700,6 +758,8 @@ model WorkflowHumanTask {
   runId               String?
   taskKey             String
   taskType            String
+  deliveryReceiptId   String? @unique
+  deliveryStatus      String @default("PENDING")
   title               String
   description         String?
   status              WorkflowHumanTaskStatus @default(OPEN)

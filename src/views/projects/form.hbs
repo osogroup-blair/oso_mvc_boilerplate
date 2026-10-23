@@ -37,6 +37,8 @@
     <form method="POST"
           action="{{#if isEdit}}/projects/{{project.id}}{{else}}/projects{{/if}}"
           class="px-6 py-6 space-y-5">
+  <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+  {{#unless isEdit}}<input type="hidden" name="operationId" value="{{operationId}}" />{{/unless}}
 
       {{!-- Name --}}
       <div>

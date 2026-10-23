@@ -15,6 +15,7 @@ import { registerViewHelpers } from "./views/helpers/viewHelpers.js";
 import { router } from "./routes/index.js";
 import { optionalAuth } from "./middleware/auth.js";
 import { dynamicRouting } from "./middleware/dynamicRouting.js";
+import { ensureCsrfToken } from "./middleware/csrf.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -52,6 +53,7 @@ export function createApp() {
 
   // Routes
   app.use(optionalAuth);
+  app.use(ensureCsrfToken);
   app.use(injectNavigation);
   
   // Inject global settings into public layout views, and verify maintenance mode

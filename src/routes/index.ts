@@ -11,9 +11,12 @@ import { authRoutes } from "./auth.routes.js";
 import { workflowRoutes } from "./workflow.routes.js";
 import { workflowTaskRoutes, workflowTaskTokenRoutes } from "./workflowTask.routes.js";
 
+import { gettingStartedRoutes } from "./getting-started.routes.js";
+
 export const router = Router();
 
 router.use("/", healthRoutes);
+router.use("/getting-started", gettingStartedRoutes);
 router.use("/auth", authRoutes);
 router.use("/api/users", userRoutes);
 router.use("/admin", adminRoutes);

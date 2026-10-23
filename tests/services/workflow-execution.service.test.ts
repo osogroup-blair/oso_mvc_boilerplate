@@ -7,7 +7,9 @@ const makeExecutionModel = () => ({
   countForOrgAndRole: vi.fn(),
   findByIdInOrg: vi.fn(),
   findByWorkflowIdInOrg: vi.fn(),
-  create: vi.fn(),
+  reserveStart: vi.fn(async data=>data),
+  createOrFind: vi.fn(),
+  update: vi.fn(),
   updateStatus: vi.fn(),
 });
 
@@ -26,6 +28,7 @@ const makePermissions = () => ({
 
 const makeTemporal = () => ({
   startWorkflow: vi.fn(),
+  workflowResult: vi.fn().mockResolvedValue({businessOutcome:"SUCCEEDED"}),
   describeWorkflow: vi.fn(),
   queryWorkflow: vi.fn(),
   cancelWorkflow: vi.fn(),
@@ -107,7 +110,7 @@ describe("WorkflowExecutionService", () => {
       workflowId: "org-org-1.platform.test.demo",
       runId: "run-1",
     });
-    executions.create.mockImplementation(async (data) => ({ id: "exec-1", ...data }));
+    executions.createOrFind.mockImplementation(async (data) => ({execution:{ id: "exec-1", ...data },created:true}));
 
     const created = await service.start(
       { userId: "user-1", roleId: "role-1" },
@@ -124,10 +127,10 @@ describe("WorkflowExecutionService", () => {
       workflowId: "org-org-1.platform.test.demo",
       args: [
         { message: "hello", durationSeconds: 3, businessKey: "demo" },
-        { orgId: "org-1", startedById: "user-1", workflowDefinitionKey: "platform.test" },
+        { orgId: "org-1", startedById: "user-1", workflowDefinitionKey: "platform.test",actionProtocol:"update-v1" },
       ],
     }));
-    expect(executions.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executions.createOrFind).toHaveBeenCalledWith(expect.objectContaining({
       orgId: "org-1",
       workflowDefinitionId: "def-1",
       startedById: "user-1",
@@ -135,18 +138,12 @@ describe("WorkflowExecutionService", () => {
       status: WorkflowExecutionStatus.RUNNING,
       inputSummary: { message: "hello", durationSeconds: 3, businessKey: "demo" },
     }));
-    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
-      actorId: "user-1",
-      action: "workflowExecution.start",
-    }));
+    expect(audit.record).not.toHaveBeenCalled(); // Model commits creation evidence atomically.
     expect(created.status).toBe(WorkflowExecutionStatus.RUNNING);
   });
 
   it("blocks starts when an active projection already owns the business key", async () => {
-    executions.findByWorkflowIdInOrg.mockResolvedValue({
-      id: "exec-existing",
-      status: WorkflowExecutionStatus.RUNNING,
-    });
+    executions.reserveStart.mockResolvedValue({orgId:"other-org",requestHash:"different"});
 
     await expect(
       service.start(
@@ -164,7 +161,7 @@ describe("WorkflowExecutionService", () => {
 
   it("ingests a scheduled workflow start when no projection exists yet", async () => {
     executions.findByWorkflowIdInOrg.mockResolvedValue(null);
-    executions.create.mockImplementation(async (data) => ({ id: "exec-scheduled", ...data }));
+    executions.createOrFind.mockImplementation(async (data) => ({execution:{ id: "exec-scheduled", ...data },created:true}));
 
     const result = await service.ensureStartedProjection({
       orgId: "org-1",
@@ -177,7 +174,7 @@ describe("WorkflowExecutionService", () => {
     });
 
     expect(catalog.getByKey).toHaveBeenCalledWith("platform.test");
-    expect(executions.create).toHaveBeenCalledWith(expect.objectContaining({
+    expect(executions.createOrFind).toHaveBeenCalledWith(expect.objectContaining({
       orgId: "org-1",
       workflowDefinitionId: "def-1",
       startedById: "user-1",
@@ -194,16 +191,13 @@ describe("WorkflowExecutionService", () => {
       stateSummary: {},
       lastSyncedAt: expect.any(Date),
     }));
-    expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
-      actorId: "user-1",
-      action: "workflowExecution.ingestScheduledStart",
-    }));
+    expect(audit.record).not.toHaveBeenCalled();
     expect(result.created).toBe(true);
     expect(result.execution.id).toBe("exec-scheduled");
   });
 
   it("does not duplicate an already ingested workflow projection", async () => {
-    executions.findByWorkflowIdInOrg.mockResolvedValue(execution);
+    executions.createOrFind.mockResolvedValue({execution,created:false});
 
     const result = await service.ensureStartedProjection({
       orgId: "org-1",
@@ -214,8 +208,8 @@ describe("WorkflowExecutionService", () => {
       input: { message: "hello", durationSeconds: 3, businessKey: "demo" },
     });
 
-    expect(catalog.getByKey).not.toHaveBeenCalled();
-    expect(executions.create).not.toHaveBeenCalled();
+    expect(catalog.getByKey).toHaveBeenCalledWith("platform.test");
+    expect(executions.createOrFind).toHaveBeenCalled();
     expect(audit.record).not.toHaveBeenCalled();
     expect(result).toEqual({ execution, created: false });
   });
@@ -256,10 +250,7 @@ describe("WorkflowExecutionService", () => {
 
   it("cancels a non-terminal workflow through Temporal and audits the request", async () => {
     executions.findByIdInOrg.mockResolvedValue(execution);
-    executions.updateStatus.mockResolvedValue({
-      ...execution,
-      status: WorkflowExecutionStatus.CANCELED,
-    });
+    executions.update.mockResolvedValue({...execution,stateSummary:{cancelRequested:true}});
 
     const cancelled = await service.cancel(
       { userId: "user-1", roleId: "role-1" },
@@ -268,12 +259,12 @@ describe("WorkflowExecutionService", () => {
     );
 
     expect(temporal.cancelWorkflow).toHaveBeenCalledWith("org-org-1.platform.test.demo", "run-1");
-    expect(executions.updateStatus).toHaveBeenCalledWith("exec-1", WorkflowExecutionStatus.CANCELED);
+    expect(executions.update).toHaveBeenCalledWith("exec-1", {stateSummary:{cancelRequested:true}});
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
       actorId: "user-1",
       action: "workflowExecution.cancel",
     }));
-    expect(cancelled.status).toBe(WorkflowExecutionStatus.CANCELED);
+    expect(cancelled.status).toBe(WorkflowExecutionStatus.RUNNING);
   });
 
   it("requires a workflow start permission before calling Temporal", async () => {

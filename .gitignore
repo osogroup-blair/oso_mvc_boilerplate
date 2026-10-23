@@ -4,4 +4,9 @@ dist/
 *.log
 public/css/app.css
 coverage/
+var/private-assets/
+artifacts/temporal-release/
+artifacts/platform-*/
 .DS_Store
+
+artifacts/docker-*/

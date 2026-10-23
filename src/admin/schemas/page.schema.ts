@@ -1,4 +1,5 @@
 import type { AdminSchema } from "../schema.types.js";
+import { STATIC_PAGE_POLICIES } from "../../lib/page-policies.js";
 
 // CMS Page admin. The `blocks` field is an inline-editable table of content
 // blocks; `seo` is a nested object. Editors manage page content here, and the
@@ -19,7 +20,7 @@ export const pageSchema: AdminSchema = {
       key: "allowedRoles",
       type: "multiRelation",
       label: "Allowed Roles",
-      help: "Roles allowed to access this page. Leave empty for public access.",
+      help: "Applies to CMS content and explicitly guarded static pages. Other hardcoded pages are inventory only.",
       multiRelation: { model: "role", labelField: "name" },
     },
     {
@@ -46,4 +47,6 @@ export const pageSchema: AdminSchema = {
       ],
     },
   ],
+  fieldsForRecord: record => record.isHardcoded && !STATIC_PAGE_POLICIES.has(String(record.slug))
+    ? pageSchema.fields.filter(field => field.key !== "allowedRoles") : pageSchema.fields,
 };

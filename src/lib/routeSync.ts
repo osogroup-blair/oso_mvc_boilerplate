@@ -1,8 +1,9 @@
-import { prisma } from "./prisma.js";
+import { appSyncModel } from "../models/appSync.model.js";
 import { logger } from "./logger.js";
 
 const APP_ROUTES = [
   "/",
+  "/getting-started",
   "/auth",
   "/admin",
   "/admin/integrations",
@@ -24,34 +25,15 @@ export async function syncAppRoutes() {
   
   try {
     for (const pattern of APP_ROUTES) {
-      await prisma.route.upsert({
-        where: { pattern },
-        update: {
-          targetType: "APP",
-          targetValue: "Internal Application Route",
-          isActive: true,
-          deletedAt: null // Restore if it was soft-deleted
-        },
-        create: {
-          pattern,
-          targetType: "APP",
-          targetValue: "Internal Application Route",
-          isActive: true
-        }
-      });
+      await appSyncModel.upsertRoute(pattern);
     }
 
     // Optionally: Clean up any APP routes in the DB that are no longer in APP_ROUTES
-    const existingAppRoutes = await prisma.route.findMany({
-      where: { targetType: "APP" }
-    });
+    const existingAppRoutes = await appSyncModel.listAppRoutes();
 
     for (const route of existingAppRoutes) {
       if (!APP_ROUTES.includes(route.pattern) && !route.deletedAt) {
-        await prisma.route.update({
-          where: { id: route.id },
-          data: { deletedAt: new Date() }
-        });
+        await appSyncModel.softDeleteRoute(route.id);
         logger.info(`Soft-deleted obsolete app route: ${route.pattern}`);
       }
     }

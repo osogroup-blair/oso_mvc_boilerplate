@@ -5,6 +5,7 @@ import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { projectService } from "../services/project.service.js";
 import { listQuerySchema, toListParams } from "../lib/query.js";
+import { randomUUID } from "node:crypto";
 
 
 // ─── Input schema ────────────────────────────────────────────────────────────
@@ -68,6 +69,7 @@ export class ProjectController {
         title:  "New Project",
         isEdit: false,
         project: {},
+        operationId: randomUUID(),
       });
     } catch (err) { next(err); }
   }
@@ -77,6 +79,7 @@ export class ProjectController {
     try {
       const data = projectSchema.parse(req.body);
       const user = req.user!;
+      const operationId = z.string().uuid().parse(req.body.operationId);
 
       const created = await projectService.create(
         {
@@ -85,7 +88,8 @@ export class ProjectController {
           status:      data.status,
           owner:       { connect: { id: user.id } },
         },
-        user.id
+        user.id,
+        operationId
       );
 
       res.redirect(`/projects/${created.id}`);

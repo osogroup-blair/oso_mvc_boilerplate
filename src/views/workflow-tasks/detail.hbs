@@ -10,7 +10,7 @@
     <div class="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{{query.error}}</div>
   {{/if}}
   {{#if query.submitted}}
-    <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Task response submitted.</div>
+    <div class="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">Response delivery recorded. Workflow processing may still be in progress.</div>
   {{/if}}
 
   <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
@@ -19,6 +19,13 @@
       <span class="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{{task.status}}</span>
     </div>
 
+    {{#if task.deliveryReceiptId}}
+      {{#if (eq task.deliveryStatus "QUEUED")}}
+        <p role="status" class="mt-4 text-sm">Your response was delivered. Business processing is pending until the workflow closes this task.</p>
+      {{else}}
+        <p role="status" class="mt-4 text-sm">Delivery is pending confirmation. Retry only with the same operation identifier and response.</p>
+      {{/if}}
+    {{/if}}
     {{#if (eq task.status "OPEN")}}
       {{> workflows/human-task-form
         action=action

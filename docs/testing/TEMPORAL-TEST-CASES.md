@@ -1,7 +1,7 @@
 # Temporal Orchestration Test Cases
 
-This catalog converts [`TEMPORAL-INTEGRATION-PLAN.md`](./TEMPORAL-INTEGRATION-PLAN.md)
-and [`TEMPORAL-PRODUCTION-ROADMAP.md`](./TEMPORAL-PRODUCTION-ROADMAP.md) into
+This catalog captures the completed Temporal integration and the
+[production roadmap](../blueprint/TEMPORAL-PRODUCTION-ROADMAP.md) as
 executable test cases. It is a test design artifact, not application runtime
 code. Cases should be implemented in the indicated test layer and linked from
 `TEST_RESULTS.md` when run.

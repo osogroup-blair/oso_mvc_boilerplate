@@ -12,7 +12,8 @@ declare global {
 }
 
 export function requestId(req: Request, res: Response, next: NextFunction) {
-  req.id = (req.headers["x-request-id"] as string) || randomUUID();
+  const supplied = req.headers["x-request-id"];
+  req.id = typeof supplied === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(supplied) ? supplied : randomUUID();
   res.setHeader("x-request-id", req.id);
   next();
 }

@@ -25,10 +25,11 @@ workflowRoutes.get(
   ensureCsrfToken,
   workflowController.executionDetail.bind(workflowController)
 );
-workflowRoutes.get(
+workflowRoutes.post(
   "/executions/:id/refresh",
   requireAuth,
   enforcePagePermissions("workflows"),
+  verifyCsrfToken,
   workflowController.refresh.bind(workflowController)
 );
 workflowRoutes.post(

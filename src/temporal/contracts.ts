@@ -3,6 +3,7 @@ export interface PlatformWorkflowContext {
   startedById: string;
   workflowDefinitionKey: string;
   scheduleId?: string;
+  actionProtocol?: string;
 }
 
 export interface EnsureWorkflowExecutionProjectionInput {
@@ -12,6 +13,7 @@ export interface EnsureWorkflowExecutionProjectionInput {
   workflowId: string;
   runId?: string;
   scheduleId?: string;
+  actionProtocol?: string;
   input: unknown;
 }
 
@@ -48,6 +50,8 @@ export interface CreateHumanTaskResult {
 }
 
 export interface WorkflowHumanActionInput {
+  operationId?: string;
+  tokenId?: string;
   taskId: string;
   actionKey: string;
   decision: string;

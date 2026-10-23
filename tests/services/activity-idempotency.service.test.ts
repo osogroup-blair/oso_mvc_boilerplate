@@ -6,8 +6,8 @@ import { ActivityIdempotencyService } from "../../src/services/activity-idempote
 const makeModel = () => ({
   find: vi.fn(),
   createRunning: vi.fn(),
-  takeOverStaleRunning: vi.fn(),
-  complete: vi.fn(),
+  claim: vi.fn(),
+  complete: vi.fn().mockResolvedValue({count:1}),
   fail: vi.fn(),
 });
 
@@ -28,16 +28,16 @@ describe("ActivityIdempotencyService", () => {
 
   it("records and completes a first activity operation", async () => {
     model.find.mockResolvedValue(null);
-    model.createRunning.mockResolvedValue({ id: "idem-1" });
+    model.createRunning.mockResolvedValue({ id: "idem-1",attempt:1 });
 
-    const result = await service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }));
+    const result = await service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }), {retrySafe:true});
 
     expect(model.createRunning).toHaveBeenCalledWith(expect.objectContaining({
       orgId: "org-1",
       scope: "scope",
       idempotencyKey: "key-1",
     }));
-    expect(model.complete).toHaveBeenCalledWith("idem-1", { ok: true });
+    expect(model.complete).toHaveBeenCalledWith("idem-1", 1, { ok: true }, undefined);
     expect(result).toEqual({ value: { ok: true }, replayed: false });
   });
 
@@ -68,30 +68,30 @@ describe("ActivityIdempotencyService", () => {
 
   it("recovers a stale running claim after an atomic takeover", async () => {
     model.find.mockResolvedValue({
-      id: "idem-1",
+      id: "idem-1",attempt:0,
       status: ActivityIdempotencyStatus.RUNNING,
       requestHash: createHash("sha256").update(JSON.stringify({ a: 1 })).digest("hex"),
     });
-    model.takeOverStaleRunning.mockResolvedValue({ id: "idem-1" });
+    model.claim.mockResolvedValue({ id: "idem-1",attempt:1 });
 
-    const result = await service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }));
+    const result = await service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }), {retrySafe:true});
 
     expect(settings.get).toHaveBeenCalledWith("ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES", "15");
-    expect(model.takeOverStaleRunning).toHaveBeenCalledWith("idem-1", expect.any(String), expect.any(Date));
-    expect(model.complete).toHaveBeenCalledWith("idem-1", { ok: true });
+    expect(model.claim).toHaveBeenCalledWith("idem-1", expect.any(String), 0, expect.any(Date));
+    expect(model.complete).toHaveBeenCalledWith("idem-1", 1, { ok: true }, undefined);
     expect(result).toEqual({ value: { ok: true }, replayed: false });
   });
 
   it("rejects a running claim that is not stale enough to take over", async () => {
     model.find.mockResolvedValue({
-      id: "idem-1",
+      id: "idem-1",attempt:0,
       status: ActivityIdempotencyStatus.RUNNING,
       requestHash: createHash("sha256").update(JSON.stringify({ a: 1 })).digest("hex"),
     });
-    model.takeOverStaleRunning.mockResolvedValue(null);
+    model.claim.mockResolvedValue(null);
 
     await expect(
-      service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }))
+      service.run("org-1", "scope", "key-1", { a: 1 }, async () => ({ ok: true }), {retrySafe:true})
     ).rejects.toMatchObject({ statusCode: 409 });
 
     expect(model.complete).not.toHaveBeenCalled();

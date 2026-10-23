@@ -12,6 +12,8 @@ const makeModel = () => ({
   countOpenForUser: vi.fn(),
   findVisibleForUser: vi.fn(),
   findById: vi.fn(),
+  isActiveMember: vi.fn().mockResolvedValue({}),
+  commitDelivery: vi.fn().mockImplementation(async()=>({task,receipt:{id:"receipt-1",status:"SUCCEEDED"}})),
   findOpenById: vi.fn(),
   findByWorkflowKey: vi.fn(),
   findExecutionByWorkflowId: vi.fn(),
@@ -189,7 +191,7 @@ describe("WorkflowHumanTaskService", () => {
     expect(model.createWithRoles).not.toHaveBeenCalled();
   });
 
-  it("submits an authenticated action by signaling Temporal and closing the task", async () => {
+  it("submits a legacy action durably without claiming business completion", async () => {
     model.findById.mockResolvedValue(task);
     model.findVisibleForUser.mockResolvedValue(task);
     model.findReceiptByIdempotencyKey.mockResolvedValue(null);
@@ -217,9 +219,8 @@ describe("WorkflowHumanTaskService", () => {
       })],
       "run-1"
     );
-    expect(model.update).toHaveBeenCalledWith("task-1", expect.objectContaining({
-      status: WorkflowHumanTaskStatus.COMPLETED,
-    }));
+    expect(model.update).not.toHaveBeenCalled();
+    expect(model.commitDelivery).toHaveBeenCalledWith(expect.objectContaining({taskId:"task-1",receiptId:"receipt-1",result:expect.objectContaining({acknowledgement:"DELIVERED",businessOutcome:"PENDING"})}));
     expect(result.alreadySubmitted).toBe(false);
   });
 

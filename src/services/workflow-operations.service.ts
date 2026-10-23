@@ -78,6 +78,22 @@ export class WorkflowOperationsService extends BaseService {
     };
   }
 
+  async canary(actor: WorkflowOperationsActor, orgId?: string) {
+    const context = await this.requireActiveOrg(actor.userId, orgId);
+    await this.assertCanAdmin(actor.roleId);
+    try { await this.temporal.applicationCanary(5000); return { activeOrg: context.activeOrg, status: "PASS" }; }
+    catch { return { activeOrg: context.activeOrg, status: "FAILED" }; }
+  }
+
+  async recoverStarts(actor: WorkflowOperationsActor, orgId?: string) {
+    const context = await this.requireActiveOrg(actor.userId, orgId);
+    await this.assertCanAdmin(actor.roleId);
+    const results = await this.executionService.recoverPendingStarts(actor, context.activeOrg.id);
+    await this.audit.record({ actorId: actor.userId, action: "workflowOperations.recoverStarts", entityType: "WorkflowStartIntent", entityId: context.activeOrg.id,
+      changes: { after: { orgId: context.activeOrg.id, recovered: results.length } } });
+    return { activeOrg: context.activeOrg, results };
+  }
+
   async reconcileStale(actor: WorkflowOperationsActor, orgId?: string, staleMinutes = 15, limit = 25) {
     const context = await this.requireActiveOrg(actor.userId, orgId);
     await this.assertCanAdmin(actor.roleId);

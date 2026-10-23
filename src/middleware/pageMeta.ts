@@ -1,11 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
-import { pageModel } from "../models/page.model.js";
+import { pageService } from "../services/page.service.js";
 import { AppError } from "../lib/AppError.js";
+import { STATIC_PAGE_POLICIES } from "../lib/page-policies.js";
 
 export function enforcePagePermissions(slug: string) {
+  if (!STATIC_PAGE_POLICIES.has(slug)) throw new Error("Declare the static Page policy before composing its guard");
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
-      const page = await pageModel.findPublishedBySlug(slug);
+      const page = await pageService.getPublishedBySlug(slug);
 
       if (!page) {
         return next();

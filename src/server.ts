@@ -2,7 +2,7 @@
 import { createApp } from "./app.js";
 import { config } from "./config/index.js";
 import { logger } from "./lib/logger.js";
-import { prisma } from "./lib/prisma.js";
+import { closeDatabase } from "./lib/prisma.js";
 import { syncAppRoutes } from "./lib/routeSync.js";
 import { syncAppPages } from "./lib/pageSync.js";
 import { syncWorkflowDefinitions } from "./lib/workflowSync.js";
@@ -31,7 +31,7 @@ async function shutdown(signal: string) {
   server.close(async () => {
     await stopWorkers();
     if (redisConnection) await redisConnection.quit();
-    await prisma.$disconnect();
+    await closeDatabase();
     process.exit(0);
   });
 }

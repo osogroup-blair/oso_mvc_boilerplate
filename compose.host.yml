@@ -1,0 +1,14 @@
+# Optional host-development ports. The default full stack uses internal DNS.
+services:
+  db:
+    ports:
+      - "127.0.0.1:5436:5432"
+  redis:
+    ports:
+      - "127.0.0.1:6380:6379"
+  temporal-postgres:
+    ports:
+      - "127.0.0.1:5437:5432"
+  temporal:
+    ports:
+      - "127.0.0.1:7243:7233"

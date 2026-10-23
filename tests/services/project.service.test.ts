@@ -9,6 +9,7 @@ const makeModel = () => ({
   count:      vi.fn().mockResolvedValue(0),
   findById:   vi.fn(),
   create:     vi.fn(),
+  createWithReceipt: vi.fn(),
   update:     vi.fn(),
   softDelete: vi.fn(),
 });
@@ -39,18 +40,17 @@ describe("ProjectService", () => {
   });
 
   // ── create ──────────────────────────────────────────────────────────────────
-  it("create returns the new project and calls audit.record", async () => {
+  it("create delegates the stable operation to the atomic model command", async () => {
     const input   = { name: "New Project", owner: { connect: { id: "user-1" } } } as any;
     const created = { id: "p-new", name: "New Project" };
-    model.create.mockResolvedValue(created);
+    model.createWithReceipt.mockResolvedValue(created);
 
-    const result = await service.create(input, "user-1");
+    const operationId = "771ca5be-6507-40ef-b781-aecbcad883ad";
+    const result = await service.create(input, "user-1", operationId);
 
     expect(result).toEqual(created);
-    expect(audit.record).toHaveBeenCalledOnce();
-    expect(audit.record).toHaveBeenCalledWith(
-      expect.objectContaining({ action: "project.create", entityType: "Project" })
-    );
+    expect(model.createWithReceipt).toHaveBeenCalledWith(input, "user-1", operationId);
+    expect(audit.record).not.toHaveBeenCalled();
   });
 
   // ── update ──────────────────────────────────────────────────────────────────

@@ -1,0 +1,32 @@
+name: Local platform verification
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck && npm run lint && npm run check:architecture && npm test && npm run build
+      - name: Provision isolated browser tooling
+        run: npm install --no-save --package-lock=false playwright@1.62.1 && npx playwright install --with-deps chromium
+      - name: Provision explicit fixture images
+        run: docker pull redis:7-alpine && docker pull postgres:16-alpine && docker pull temporalio/auto-setup:1.25.2
+      - run: npm run test:platform:owned -- --browser --temporal
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: local-platform-evidence
+          path: |
+            artifacts/platform-*/**/*results.json
+            artifacts/platform-*/*.log
+            artifacts/platform-*/legacy/*.json
+            artifacts/platform-*/*.png
