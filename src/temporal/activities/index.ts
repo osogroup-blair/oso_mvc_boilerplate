@@ -1,7 +1,6 @@
 import { workflowHumanTaskService } from "../../services/workflow-human-task.service.js";
 import { workflowExecutionService } from "../../services/workflow-execution.service.js";
 import { runIntegrationOperation } from "./integration-activity.js";
-import type { SyntheticEchoAdapter } from "../../integrations/provider-registry.js";
 import type {
   CloseHumanTaskInput,
   CreateHumanTaskInput,
@@ -39,22 +38,23 @@ export async function runSyntheticIntegration(
       orgId: input.orgId,
       workflowDefinitionKey: input.workflowDefinitionKey,
       requirementKey: input.requirementKey,
+      providerKey: "synthetic.echo",
+      operation: "echo",
       scope: "integration.synthetic.echo",
       idempotencyKey: input.idempotencyKey,
       request: input,
     },
-    async (resolved) => {
-      const adapter = resolved.adapter as SyntheticEchoAdapter;
+    async ({ adapter, connection }) => {
       const echoed = await adapter.echo(input.payload);
 
       return {
-        providerKey: resolved.connection.providerKey,
-        connectionId: resolved.connection.id,
+        providerKey: connection.providerKey,
+        connectionId: connection.id,
         endpointLabel: echoed.endpointLabel,
-        echoed: echoed.echoed as Record<string, unknown>,
+        echoed: echoed.echoed,
         replayed: false,
       };
-    }, { retrySafe: true }
+    }
   );
 
   return { ...result.value, replayed: result.replayed };
@@ -68,12 +68,13 @@ export async function runShowcaseSyntheticStep(
       orgId: input.orgId,
       workflowDefinitionKey: input.workflowDefinitionKey,
       requirementKey: input.requirementKey,
+      providerKey: "synthetic.echo",
+      operation: "echo",
       scope: `showcase.synthetic.${input.workflowDefinitionKey}.${input.stepKey}`,
       idempotencyKey: input.idempotencyKey,
       request: input,
     },
-    async (resolved) => {
-      const adapter = resolved.adapter as SyntheticEchoAdapter;
+    async ({ adapter, connection }) => {
       const echoed = await adapter.echo({
         stepKey: input.stepKey,
         ...input.payload,
@@ -81,13 +82,13 @@ export async function runShowcaseSyntheticStep(
 
       return {
         stepKey: input.stepKey,
-        providerKey: resolved.connection.providerKey,
-        connectionId: resolved.connection.id,
+        providerKey: connection.providerKey,
+        connectionId: connection.id,
         endpointLabel: echoed.endpointLabel,
-        echoed: echoed.echoed as Record<string, unknown>,
+        echoed: echoed.echoed,
         replayed: false,
       };
-    }, { retrySafe: true }
+    }
   );
 
   return { ...result.value, replayed: result.replayed };

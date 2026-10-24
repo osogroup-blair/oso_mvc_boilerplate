@@ -3,6 +3,7 @@ import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contr
 import { underwritingCapstoneStateQuery, underwritingCapstoneActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type UnderwritingCheckType, type UnderwritingStatus, type UnderwritingCapstoneWorkflowInput, type UnderwritingCheckState, type UnderwritingDecisionRecord, type UnderwritingCapstoneState, underwritingCheckTypes, createUnderwritingCheckState } from './shared.js';
 import { underwritingRiskCheckChildWorkflow } from './underwriting-risk-check-child.workflow.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function underwritingCapstoneWorkflow(
   input: UnderwritingCapstoneWorkflowInput,
@@ -40,7 +41,7 @@ export async function underwritingCapstoneWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.underwritingCapstone">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.stepInstance ?? payload.decision ?? payload.message ?? payload.applicationId ?? "underwriting")}`,
       payload,

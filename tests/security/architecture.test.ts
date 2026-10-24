@@ -10,6 +10,19 @@ describe("architecture boundaries", () => {
     expect(checkSource("src/services/example.ts", 'import { prisma } from "../lib/prisma.js";')).toHaveLength(1);
     expect(checkSource("src/services/example.ts", 'const x = process.env.SECRET;')).toHaveLength(1);
   });
+  it("keeps integration providers out of Workflow runtime code and application layers out of providers", () => {
+    expect(checkSource("src/temporal/workflows/example.ts", 'import { getIntegrationProvider } from "../../integrations/index.js";')).toHaveLength(1);
+    expect(checkSource("src/temporal/workflows/example.ts", 'import { workflowRegistrations } from "../workflow-registry.js";')).toHaveLength(1);
+    expect(checkSource("src/temporal/workflows/example.ts", 'import type { RequirementKeyFor } from "../workflow-registry.js";')).toEqual([]);
+    expect(checkSource("src/temporal/workflows/example.ts", 'import type { SyntheticEchoAdapter } from "../../integrations/index.js";')).toEqual([]);
+    expect(checkSource("src/integrations/providers/example/index.ts", 'import { settingService } from "../../../services/setting.service.js";')).toHaveLength(1);
+    expect(checkSource("src/integrations/providers/example/index.ts", 'import { prisma } from "../../../lib/prisma.js";')).not.toEqual([]);
+    expect(checkSource("src/integrations/providers/example/index.ts", 'import { config } from "../../../config/index.js";')).toHaveLength(1);
+    expect(checkSource("src/integrations/index.ts", 'import { activities } from "../temporal/activities/index.js";')).toHaveLength(1);
+    expect(checkSource("src/integrations/providers/example/index.ts", 'import { z } from "zod";')).toEqual([]);
+    expect(checkSource("src/integrations/availability.ts", 'import { AppError } from "../lib/AppError.js";')).toEqual([]);
+  });
+
   it("permits types/enums and the narrow cleanup seam without permitting arbitrary queries", () => {
     expect(checkSource("src/controllers/example.ts", 'import type { Row } from "../models/example.model.js";')).toEqual([]);
     expect(checkSource("src/services/example.ts", 'import { WorkflowExecutionStatus } from "@prisma/client";')).toEqual([]);

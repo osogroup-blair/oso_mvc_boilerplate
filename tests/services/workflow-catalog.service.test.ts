@@ -69,7 +69,7 @@ describe("WorkflowCatalogService", () => {
         validateStart: (input) => input,
         actions: {},
         integrationRequirements: [
-          { key: "crm", providerKey: "hubspot", capabilityKey: "contact.read", label: "CRM" },
+          { key: "crm", providerKey: "synthetic.echo", capabilityKey: "echo", label: "CRM" },
         ],
         summarizeState: () => ({}),
       },
@@ -86,7 +86,7 @@ describe("WorkflowCatalogService", () => {
       expect.objectContaining({
         workflowDefinitionId: "def-1",
         key: "crm",
-        providerKey: "hubspot",
+        providerKey: "synthetic.echo",
       }),
     ]);
   });

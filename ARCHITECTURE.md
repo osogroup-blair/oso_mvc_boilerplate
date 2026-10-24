@@ -102,7 +102,10 @@ src/
     workflowSync.ts        Startup utility: syncs code-registered workflow definitions into the DB catalog.
 
   integrations/
-    provider-registry.ts   Code-owned provider registry. Providers declare config/credential schemas, tests, redaction, and Activity adapters.
+    index.ts               Typed provider registry (integrationProviders tuple) plus IntegrationProviderKey/AdapterFor/OperationFor types.
+    types.ts               IntegrationProviderRegistration, ProviderOperation (retrySafe, idempotency-key support, retention, data classes), defineIntegrationProvider.
+    providers/<name>/      One module per provider: schemas.ts (Zod), adapter.ts (adapter interface + factory), index.ts (registration), README.md.
+    provider-registry.ts   Deprecated re-export of index.ts, kept for one release.
     availability.ts        Single binding/connection availability evaluator shared by start gating, Activity resolvers, and operations; IntegrationUnavailableError.
     safety.ts              Provider-call guards: timeout with AbortSignal and credential-value scrubbing for stored/audited messages.
 
@@ -150,8 +153,8 @@ src/
     workflow-operations.service.ts Worker/cluster diagnostics and stale execution projection reconciliation.
 
   temporal/
-    forms.ts               Serializable workflow form vocabulary used by registry metadata.
-    workflow-registry.ts   Code-owned workflow registration list and collision validation.
+    forms.ts               Re-export of src/lib/forms.ts (serializable form vocabulary shared by workflow registrations and integration providers).
+    workflow-registry.ts   Code-owned workflow registrations (defineWorkflow), collision and provider/capability validation, RequirementKeyFor/IntegrationRequirementKey types.
     worker.ts              Separate Temporal Worker process entrypoint. Does not import Express/server.
     workflows/             Deterministic Workflow modules. No services, Prisma, Node I/O, or config imports.
     activities/            Activity modules. May call application services and integration adapters.

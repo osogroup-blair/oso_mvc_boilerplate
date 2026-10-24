@@ -1,3 +1,5 @@
+import type { IntegrationRequirementKey } from "./workflow-registry.js";
+
 export interface PlatformWorkflowContext {
   orgId: string;
   startedById: string;
@@ -99,7 +101,8 @@ export function isIntegrationConfigurationFailure(type: string | undefined | nul
 export interface RunSyntheticIntegrationInput {
   orgId: string;
   workflowDefinitionKey: string;
-  requirementKey: string;
+  /** Checked against every requirement declared in workflow-registry.ts. */
+  requirementKey: IntegrationRequirementKey;
   idempotencyKey: string;
   payload: Record<string, unknown>;
 }
@@ -119,7 +122,8 @@ export interface IntegrationActivities {
 export interface RunShowcaseSyntheticStepInput {
   orgId: string;
   workflowDefinitionKey: string;
-  requirementKey: string;
+  /** Checked against every requirement declared in workflow-registry.ts. */
+  requirementKey: IntegrationRequirementKey;
   stepKey: string;
   idempotencyKey: string;
   payload: Record<string, unknown>;

@@ -1,10 +1,12 @@
 import { z } from "zod";
 import { config } from "../config/index.js";
 import { emptyForm, FormDefinition } from "./forms.js";
+import { getIntegrationProvider, type IntegrationProviderKey } from "../integrations/index.js";
 
-export interface IntegrationRequirementRegistration {
-  key: string;
-  providerKey: string;
+export interface IntegrationRequirementRegistration<TKey extends string = string> {
+  key: TKey;
+  /** Must name a provider in src/integrations/index.ts; checked by tsc and validateWorkflowRegistry. */
+  providerKey: IntegrationProviderKey;
   capabilityKey?: string;
   label: string;
   description?: string;
@@ -34,8 +36,23 @@ export interface WorkflowTypeRegistration<TInput = unknown, TState = unknown> {
   stateQuery?: string;
   summarizeInput?: (input: TInput) => Record<string, unknown>;
   actions: Record<string, WorkflowActionRegistration>;
-  integrationRequirements: IntegrationRequirementRegistration[];
+  integrationRequirements: readonly IntegrationRequirementRegistration[];
   summarizeState: (state: TState) => Record<string, unknown>;
+}
+
+/**
+ * Identity helper that keeps a registration's key and requirement keys as
+ * literal types, so Workflow code can type-check `requirementKey` against the
+ * declaration (see RequirementKeyFor). A registration with no requirements
+ * accepts no requirement keys.
+ */
+export function defineWorkflow<const TKey extends string, const TRequirementKey extends string = never>(
+  registration: Omit<WorkflowTypeRegistration, "key" | "integrationRequirements"> & {
+    key: TKey;
+    integrationRequirements: readonly IntegrationRequirementRegistration<TRequirementKey>[];
+  }
+) {
+  return registration;
 }
 
 const platformHeartbeatInputSchema = z.object({}).passthrough();
@@ -317,8 +334,8 @@ const underwritingActionSchema = z.object({
   notes: z.string().trim().max(2000).optional().or(z.literal("")),
 });
 
-export const workflowRegistrations: WorkflowTypeRegistration[] = [
-  {
+const registeredWorkflows = [
+  defineWorkflow({
     key: "platform.heartbeat",
     slug: "platform-heartbeat",
     workflowType: "temporalPlatformHeartbeatWorkflow",
@@ -333,8 +350,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
     actions: {},
     integrationRequirements: [],
     summarizeState: () => ({ status: "ready" }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "platform.test",
     slug: "platform-test",
     workflowType: "platformTestWorkflow",
@@ -400,8 +417,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       businessKey: (state as { businessKey?: unknown }).businessKey ?? null,
       integration: (state as { integration?: unknown }).integration ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "platform.approval",
     slug: "platform-approval",
     workflowType: "platformApprovalWorkflow",
@@ -497,8 +514,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       taskId: (state as { taskId?: unknown }).taskId ?? null,
       decision: (state as { decision?: unknown }).decision ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.customerOnboarding",
     slug: "showcase-customer-onboarding",
     workflowType: "customerOnboardingWorkflow",
@@ -628,8 +645,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       rejectionReason: (state as { rejectionReason?: unknown }).rejectionReason ?? null,
       workspaceUrl: (state as { workspaceUrl?: unknown }).workspaceUrl ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.humanApproval",
     slug: "showcase-human-approval",
     workflowType: "humanApprovalWorkflow",
@@ -758,8 +775,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       escalated: (state as { escalated?: unknown }).escalated ?? false,
       decisionHistory: (state as { decisionHistory?: unknown }).decisionHistory ?? [],
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.orderFulfillmentSaga",
     slug: "showcase-order-fulfillment-saga",
     workflowType: "orderFulfillmentSagaWorkflow",
@@ -849,8 +866,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       orderRecordState: (state as { orderRecordState?: unknown }).orderRecordState ?? "idle",
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.dataSynchronization",
     slug: "showcase-data-synchronization",
     workflowType: "dataSynchronizationWorkflow",
@@ -939,8 +956,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       completedSteps: (state as { completedSteps?: unknown }).completedSteps ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.employeeLifecycle",
     slug: "showcase-employee-lifecycle",
     workflowType: "employeeLifecycleWorkflow",
@@ -1070,8 +1087,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       nextScheduledAction: (state as { nextScheduledAction?: unknown }).nextScheduledAction ?? null,
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.clientEngagement",
     slug: "showcase-client-engagement",
     workflowType: "clientEngagementWorkflow",
@@ -1188,8 +1205,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       milestones: (state as { milestones?: unknown }).milestones ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.aiDocumentProcessing",
     slug: "showcase-ai-document-processing",
     workflowType: "aiDocumentProcessingWorkflow",
@@ -1343,8 +1360,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       completedSteps: (state as { completedSteps?: unknown }).completedSteps ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.aiSupportAgent",
     slug: "showcase-ai-support-agent",
     workflowType: "aiSupportAgentWorkflow",
@@ -1499,8 +1516,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       completedSteps: (state as { completedSteps?: unknown }).completedSteps ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.complianceReview",
     slug: "showcase-compliance-review",
     workflowType: "complianceReviewWorkflow",
@@ -1624,8 +1641,8 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       completedSteps: (state as { completedSteps?: unknown }).completedSteps ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-  {
+  }),
+  defineWorkflow({
     key: "showcase.underwritingCapstone",
     slug: "showcase-underwriting-capstone",
     workflowType: "underwritingCapstoneWorkflow",
@@ -1788,8 +1805,20 @@ export const workflowRegistrations: WorkflowTypeRegistration[] = [
       completedSteps: (state as { completedSteps?: unknown }).completedSteps ?? [],
       lastError: (state as { lastError?: unknown }).lastError ?? null,
     }),
-  },
-];
+  }),
+] as const;
+
+/** Runtime list of every code-registered workflow. */
+export const workflowRegistrations: WorkflowTypeRegistration[] = [...registeredWorkflows];
+
+type RegisteredWorkflow = (typeof registeredWorkflows)[number];
+/** Literal union of registered workflow keys, e.g. "platform.test". */
+export type RegisteredWorkflowKey = RegisteredWorkflow["key"];
+/** Integration requirement keys declared by one workflow; use with `satisfies` in Workflow code. */
+export type RequirementKeyFor<K extends RegisteredWorkflowKey> =
+  Extract<RegisteredWorkflow, { key: K }>["integrationRequirements"][number]["key"];
+/** Every integration requirement key declared by any registered workflow. */
+export type IntegrationRequirementKey = RegisteredWorkflow["integrationRequirements"][number]["key"];
 
 export function getWorkflowRegistration(key: string) {
   return workflowRegistrations.find((registration) => registration.key === key) ?? null;
@@ -1838,6 +1867,15 @@ export function validateWorkflowRegistry(registrations = workflowRegistrations) 
         throw new Error(`Duplicate integration requirement "${requirement.key}" in workflow registration: ${registration.key}`);
       }
       requirementKeys.add(requirement.key);
+    }
+    for (const requirement of registration.integrationRequirements) {
+      const provider = getIntegrationProvider(requirement.providerKey);
+      if (!provider) {
+        throw new Error(`Unknown integration provider "${requirement.providerKey}" for requirement "${requirement.key}" in workflow registration: ${registration.key}`);
+      }
+      if (requirement.capabilityKey && !provider.capabilities.includes(requirement.capabilityKey)) {
+        throw new Error(`Integration provider "${requirement.providerKey}" does not declare capability "${requirement.capabilityKey}" (requirement "${requirement.key}" in workflow registration: ${registration.key})`);
+      }
     }
   }
 

@@ -1,6 +1,7 @@
 import { workflowInfo } from "@temporalio/workflow";
 import { showcaseActivities, type UnderwritingCheckType, type UnderwritingCheckResult, type UnderwritingRiskCheckChildInput } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function underwritingRiskCheckChildWorkflow(
   input: UnderwritingRiskCheckChildInput
@@ -16,7 +17,7 @@ export async function underwritingRiskCheckChildWorkflow(
   await showcaseActivities.runShowcaseSyntheticStep({
     orgId: input.orgId,
     workflowDefinitionKey: input.workflowDefinitionKey,
-    requirementKey: "syntheticEcho",
+    requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.underwritingCapstone">,
     stepKey: `underwriting.riskCheck.${input.checkType}`,
     idempotencyKey: `${info.workflowId}:risk-check`,
     payload: {

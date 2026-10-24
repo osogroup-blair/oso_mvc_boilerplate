@@ -4,7 +4,7 @@ import { prisma } from "../../src/lib/prisma.js";
 import { IntegrationService } from "../../src/services/integration.service.js";
 import { IntegrationResolverService } from "../../src/services/integration-resolver.service.js";
 import { credentialEncryptionService } from "../../src/services/credential-encryption.service.js";
-import { syntheticEchoProvider } from "../../src/integrations/provider-registry.js";
+import { syntheticEchoProvider } from "../../src/integrations/index.js";
 import { IntegrationUnavailableError } from "../../src/integrations/availability.js";
 
 // Owned-SQL proof for integrations hardening Phase 1 (INT-01..INT-03). Org
@@ -55,7 +55,7 @@ async function gateAndResolver() {
     where: { id: definitionId }, include: { integrationRequirements: { where: { deletedAt: null } } },
   });
   const [gate] = await service.getRequirementStatuses(orgId, definition);
-  const resolved = await resolver.resolve({ orgId, workflowDefinitionKey: definitionKey, requirementKey: "syntheticEcho" })
+  const resolved = await resolver.resolve({ orgId, workflowDefinitionKey: definitionKey, requirementKey: "syntheticEcho", providerKey: "synthetic.echo" })
     .then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error }));
   return { gate, resolved };
 }

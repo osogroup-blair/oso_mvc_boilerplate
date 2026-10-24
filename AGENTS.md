@@ -143,9 +143,10 @@ prompt construction, tool execution, and idempotent audit-safe result storage.
 Workflow integration requirements are declared in
 `src/temporal/workflow-registry.ts` and synced to the database. Admins manage
 organization connections and requirement bindings at `/admin/integrations`.
-Provider definitions live in `src/integrations/provider-registry.ts`; they
-declare credential/config schemas, test behavior, redaction, and Activity
-adapters.
+Provider definitions live in `src/integrations/providers/<name>/` and are
+listed in the typed registry `src/integrations/index.ts`; they declare
+credential/config schemas, test behavior, redaction, Activity adapters, and
+per-operation retry semantics (`operations`).
 
 Credentials are infrastructure secrets. They are encrypted by
 `credential-encryption.service.ts` using config from `src/config/index.ts`,

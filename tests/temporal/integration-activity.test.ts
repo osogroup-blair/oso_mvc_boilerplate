@@ -8,11 +8,14 @@ import {
   toIntegrationConfigurationFailure,
 } from "../../src/temporal/activities/integration-activity.js";
 import { INTEGRATION_FAILURE_TYPES, isIntegrationConfigurationFailure } from "../../src/temporal/contracts.js";
+import { getIntegrationProvider } from "../../src/integrations/index.js";
 
 const input = {
   orgId: "org-1",
   workflowDefinitionKey: "platform.test",
   requirementKey: "syntheticEcho",
+  providerKey: "synthetic.echo" as const,
+  operation: "echo" as const,
   scope: "integration.synthetic.echo",
   idempotencyKey: "wf-1:step",
   request: { payload: { a: 1 } },
@@ -30,6 +33,7 @@ function makeDeps() {
       })),
       findSucceeded: vi.fn().mockResolvedValue(null),
     },
+    providers: vi.fn(getIntegrationProvider),
   };
 }
 
@@ -39,12 +43,37 @@ describe("runIntegrationOperation", () => {
     const run = createIntegrationOperationRunner(deps as never);
     const operation = vi.fn().mockResolvedValue({ ok: true });
 
-    const result = await run(input, operation, { retrySafe: true });
+    const result = await run(input, operation);
 
     expect(result).toEqual({ value: { ok: true }, replayed: false });
     expect(deps.resolver.resolve.mock.invocationCallOrder[0]).toBeLessThan(deps.idempotency.run.mock.invocationCallOrder[0]);
+    expect(deps.resolver.resolve).toHaveBeenCalledWith(expect.objectContaining({ providerKey: "synthetic.echo" }));
     expect(operation).toHaveBeenCalledWith(resolved, "op-key");
+    // retrySafe comes from the synthetic.echo "echo" operation declaration, not the call site.
     expect(deps.idempotency.run).toHaveBeenCalledWith("org-1", input.scope, input.idempotencyKey, input.request, expect.any(Function), { retrySafe: true });
+  });
+
+  it("takes retry safety from the declared operation and ignores call-site overrides", async () => {
+    const deps = makeDeps();
+    const echo = getIntegrationProvider("synthetic.echo")!;
+    deps.providers.mockReturnValue({ ...echo, operations: { echo: { ...echo.operations.echo, retrySafe: false } } });
+    const run = createIntegrationOperationRunner(deps as never);
+    const classifyError = () => "terminal" as const;
+
+    await run(input, vi.fn().mockResolvedValue({}), { classifyError, retrySafe: true } as never);
+
+    expect(deps.idempotency.run.mock.calls[0][5]).toEqual({ classifyError, retrySafe: false });
+  });
+
+  it("rejects an undeclared provider operation before resolving or reserving", async () => {
+    const deps = makeDeps();
+    const run = createIntegrationOperationRunner(deps as never);
+
+    const error = await run({ ...input, operation: "deliver" as never }, vi.fn()).catch((err: unknown) => err);
+
+    expect(error).toMatchObject({ nonRetryable: true, type: INTEGRATION_FAILURE_TYPES.RESOLUTION_FAILED });
+    expect(deps.resolver.resolve).not.toHaveBeenCalled();
+    expect(deps.idempotency.run).not.toHaveBeenCalled();
   });
 
   it("fails a missing binding fast as non-retryable without creating an idempotency reservation", async () => {
@@ -86,7 +115,7 @@ describe("runIntegrationOperation", () => {
     const providerError = new Error("503");
     const run = createIntegrationOperationRunner(deps as never);
 
-    await expect(run(input, vi.fn().mockRejectedValue(providerError), { retrySafe: true })).rejects.toBe(providerError);
+    await expect(run(input, vi.fn().mockRejectedValue(providerError))).rejects.toBe(providerError);
     expect(deps.idempotency.run).toHaveBeenCalled();
   });
 });

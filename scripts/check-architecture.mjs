@@ -29,6 +29,11 @@ export function checkSource(file, text) {
     if (file.startsWith("src/views/helpers/") && (models || services || controllers || routes)) add(node, "View helpers receive data; they cannot fetch through application layers");
     if (file.startsWith("src/temporal/workflows/") && (models || services || controllers || routes || target.startsWith("src/config/") || specifier.startsWith("node:")
       || ["fs", "path", "crypto", "http", "https", "url", "os", "process"].includes(specifier))) add(node, "Workflow imports must be deterministic");
+    if (file.startsWith("src/temporal/workflows/") && (target.startsWith("src/integrations/") || target.startsWith("src/temporal/workflow-registry")))
+      add(node, "Workflows may import integration providers and the workflow registry as types only (import type); see skills/SKILL-temporal.md");
+    if (file.startsWith("src/integrations/") && (models || services || controllers || routes || target.startsWith("src/config/") || target.startsWith("src/temporal/")
+      || target === "src/lib/prisma.js" || target === "src/lib/prisma"))
+      add(node, "Integration providers receive config/credentials from resolvers; they must not import application layers, config, or Temporal code");
     if ((target === "src/lib/prisma.js" || target === "src/lib/prisma") && !file.startsWith("src/models/")) {
       const clause = ts.isImportDeclaration(node) ? node.importClause : undefined;
       const cleanupOnly = clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && !clause.name

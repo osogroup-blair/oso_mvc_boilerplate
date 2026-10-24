@@ -2,6 +2,7 @@ import { isCancellation, setHandler, sleep, workflowInfo } from "@temporalio/wor
 import type { PlatformWorkflowContext } from "../contracts.js";
 import { type PlatformTestWorkflowInput, type PlatformTestWorkflowState, platformTestStateQuery, integrations, ensureWorkflowExecutionProjection } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function platformTestWorkflow(
   input: PlatformTestWorkflowInput,
@@ -22,7 +23,7 @@ export async function platformTestWorkflow(
     const integration = await integrations.runSyntheticIntegration({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"platform.test">,
       idempotencyKey: `${workflowInfo().workflowId}:syntheticEcho`,
       payload: {
         message: input.message,

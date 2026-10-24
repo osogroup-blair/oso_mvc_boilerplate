@@ -11,12 +11,24 @@ import {
   type ActivityIdempotencyService,
   type ActivityOperationPolicy,
 } from "../../services/activity-idempotency.service.js";
+import {
+  getIntegrationProvider,
+  type AdapterFor,
+  type IntegrationProviderKey,
+  type IntegrationProviderRegistration,
+  type OperationFor,
+} from "../../integrations/index.js";
 import { INTEGRATION_FAILURE_TYPES } from "../contracts.js";
+import type { IntegrationRequirementKey } from "../workflow-registry.js";
 
-export interface IntegrationOperationInput {
+export interface IntegrationOperationInput<K extends IntegrationProviderKey> {
   orgId: string;
   workflowDefinitionKey: string;
-  requirementKey: string;
+  requirementKey: IntegrationRequirementKey;
+  /** Provider the operation is written against; types the adapter passed to the callback. */
+  providerKey: K;
+  /** Declared provider operation; its retrySafe flag drives the idempotency policy. */
+  operation: OperationFor<K>;
   /** Idempotency scope; one per provider operation, e.g. "integration.synthetic.echo". */
   scope: string;
   idempotencyKey: string;
@@ -24,11 +36,17 @@ export interface IntegrationOperationInput {
   request: unknown;
 }
 
-export type ResolvedIntegration = Awaited<ReturnType<IntegrationResolverService["resolve"]>>;
+export type ResolvedIntegration<K extends IntegrationProviderKey> = Awaited<ReturnType<IntegrationResolverService["resolve"]>> & {
+  adapter: AdapterFor<K>;
+};
+
+/** Retry safety comes from the provider's declared operation, never from the call site. */
+export type IntegrationOperationPolicy<T> = Omit<ActivityOperationPolicy<T>, "retrySafe">;
 
 export interface IntegrationOperationDeps {
   resolver: Pick<IntegrationResolverService, "resolve">;
   idempotency: Pick<ActivityIdempotencyService, "run" | "findSucceeded">;
+  providers: (providerKey: string) => IntegrationProviderRegistration | null;
 }
 
 /**
@@ -61,19 +79,32 @@ export function toIntegrationConfigurationFailure(error: unknown): ApplicationFa
  *   3. run the provider call under ActivityIdempotencyService.
  */
 export function createIntegrationOperationRunner(
-  deps: IntegrationOperationDeps = { resolver: integrationResolverService, idempotency: activityIdempotencyService }
+  deps: IntegrationOperationDeps = {
+    resolver: integrationResolverService,
+    idempotency: activityIdempotencyService,
+    providers: getIntegrationProvider,
+  }
 ) {
-  return async function runIntegrationOperation<T>(
-    input: IntegrationOperationInput,
-    operation: (resolved: ResolvedIntegration, operationKey: string) => Promise<T>,
-    policy: ActivityOperationPolicy<T> = {}
+  return async function runIntegrationOperation<K extends IntegrationProviderKey, T>(
+    input: IntegrationOperationInput<K>,
+    operation: (resolved: ResolvedIntegration<K>, operationKey: string) => Promise<T>,
+    policy: IntegrationOperationPolicy<T> = {}
   ): Promise<{ value: T; replayed: boolean }> {
-    let resolved: ResolvedIntegration;
+    const declared = deps.providers(input.providerKey)?.operations[input.operation];
+    if (!declared) {
+      throw ApplicationFailure.nonRetryable(
+        `Provider ${input.providerKey} does not declare operation ${input.operation}`,
+        INTEGRATION_FAILURE_TYPES.RESOLUTION_FAILED
+      );
+    }
+
+    let resolved: ResolvedIntegration<K>;
     try {
       resolved = await deps.resolver.resolve({
         orgId: input.orgId,
         workflowDefinitionKey: input.workflowDefinitionKey,
         requirementKey: input.requirementKey,
+        providerKey: input.providerKey,
       });
     } catch (error) {
       const failure = toIntegrationConfigurationFailure(error);
@@ -89,7 +120,7 @@ export function createIntegrationOperationRunner(
       input.idempotencyKey,
       input.request,
       (operationKey) => operation(resolved, operationKey),
-      policy
+      { ...policy, retrySafe: declared.retrySafe }
     );
   };
 }

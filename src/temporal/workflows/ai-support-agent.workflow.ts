@@ -2,6 +2,7 @@ import { condition, setHandler, workflowInfo } from "@temporalio/workflow";
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { aiSupportAgentStateQuery, aiSupportAgentApprovalActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type AiSupportAgentToolName, type AiSupportAgentAction, type AiSupportAgentWorkflowInput, type AiSupportAgentToolCall, type AiSupportAgentState } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function aiSupportAgentWorkflow(
   input: AiSupportAgentWorkflowInput,
@@ -31,7 +32,7 @@ export async function aiSupportAgentWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.aiSupportAgent">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.toolName ?? payload.caseId ?? "agent")}`,
       payload,

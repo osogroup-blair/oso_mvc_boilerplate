@@ -32,7 +32,7 @@ import {
   getIntegrationProvider,
   listIntegrationProviders,
   type IntegrationProviderRegistration,
-} from "../integrations/provider-registry.js";
+} from "../integrations/index.js";
 import {
   evaluateBindingAvailability,
   type IntegrationAvailabilityStatus,

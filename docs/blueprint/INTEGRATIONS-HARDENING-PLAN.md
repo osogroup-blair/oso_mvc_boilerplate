@@ -1,6 +1,6 @@
 # Workflow Integrations Hardening Plan
 
-**Status:** Phase 1 complete and owned-stack accepted (2026-10-24; see §4 Phase 1 implementation notes). Phases 2–7 not started.
+**Status:** Phase 1 complete and owned-stack accepted; Phase 2 source complete (2026-10-24; see the implementation notes under each phase). Phases 3–7 not started.
 **Baseline:** `0dc7d01` (`Integrate platform reliability improvements and clean up documentation`)
 **Scope:** fix correctness and security gaps in the integration platform
 (providers, connections, bindings, resolvers, Activity idempotency). Make the
@@ -254,6 +254,36 @@ without `tsc` failing.
   **type-only**. Any runtime import is an error.
 - `eslint.config.js`: `no-restricted-syntax` rule banning `TSAsExpression` whose
   type name ends in `Adapter` under `src/temporal/activities/**`.
+
+**Phase 2 implementation notes (2026-10-24):**
+- INT-06: `FormDefinition` moved to `src/lib/forms.ts`, not
+  `src/integrations/forms.ts`, because workflow registrations use it too;
+  `src/temporal/forms.ts` re-exports it. `provider-registry.ts` is a deprecated
+  re-export of `src/integrations/index.ts`. `http.ts` stays in Phase 3 (INT-09).
+- INT-07: `IntegrationResolverService.resolve` now requires `providerKey` and
+  rejects an Activity/registry provider mismatch as `PROVIDER_MISMATCH`.
+  `runIntegrationOperation` requires `providerKey` + `operation`, rejects an
+  undeclared operation (non-retryable `INTEGRATION_RESOLUTION_FAILED`), and
+  takes `retrySafe` from the declaration (call-site overrides are ignored).
+  `responseRetentionDays` is declared but not yet enforced (INT-14). The direct
+  `IntegrationConnectionResolverService.resolve` keeps its untyped adapter; it
+  has no Activity callers.
+- INT-08: registrations are wrapped in `defineWorkflow(...)` (literal key and
+  requirement-key types), `providerKey` is typed as `IntegrationProviderKey`,
+  and `validateWorkflowRegistry` also rejects unregistered providers and
+  undeclared capabilities at boot. Workflow call sites use
+  `"syntheticEcho" satisfies RequirementKeyFor<"<workflow key>">` (15 sites);
+  Activity contracts type `requirementKey` as `IntegrationRequirementKey`.
+  Compile-time negative tests live in `tests/types/integration-contracts.ts`
+  (`tsconfig.typetests.json`, run by `npm run typecheck`).
+- Guardrails: the architecture check now also rejects runtime imports of
+  `src/integrations/**` or `workflow-registry.ts` from Workflow code, and
+  application-layer/config/Temporal imports from `src/integrations/**` (pulled
+  forward from INT-19). ESLint rejects `as *Adapter` / `as AdapterFor<…>` in
+  `src/temporal/activities/**` (`tests/security/lint-guardrails.test.ts`).
+- Regression: owned run `57877bdd-0203-4a24-8af4-c6fa3e87b9b8`
+  (`--browser --temporal`) PASS on every stage, including the Phase 1
+  `integration-failures` stage, which now exercises the typed runner.
 
 **Phase 2 acceptance:** no `as *Adapter` casts remain; a deliberately misspelled
 requirement key in a fixture fails `tsc`; architecture check covers the new

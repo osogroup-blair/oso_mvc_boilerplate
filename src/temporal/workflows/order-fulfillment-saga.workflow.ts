@@ -2,6 +2,7 @@ import { isCancellation, setHandler, workflowInfo } from "@temporalio/workflow";
 import type { PlatformWorkflowContext } from "../contracts.js";
 import { orderFulfillmentSagaStateQuery, showcaseActivities, ensureWorkflowExecutionProjection, type OrderFulfillmentSagaWorkflowInput, type OrderFulfillmentSagaState } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function orderFulfillmentSagaWorkflow(
   input: OrderFulfillmentSagaWorkflowInput,
@@ -30,7 +31,7 @@ export async function orderFulfillmentSagaWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.orderFulfillmentSaga">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}`,
       payload,

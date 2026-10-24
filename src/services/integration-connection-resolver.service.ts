@@ -3,7 +3,7 @@ import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { integrationConnectionModel, IntegrationConnectionModel } from "../models/integrationConnection.model.js";
 import { credentialEncryptionService, CredentialEncryptionService } from "./credential-encryption.service.js";
-import { getIntegrationProvider } from "../integrations/provider-registry.js";
+import { getIntegrationProvider } from "../integrations/index.js";
 import { assertAvailable, evaluateConnectionAvailability } from "../integrations/availability.js";
 
 export interface ConnectionRequirement { orgId: string; providerKey?: string; capabilityKey?: string }

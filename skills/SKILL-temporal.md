@@ -28,7 +28,8 @@ baseline versioning/runbook guidance lives in `docs/temporal-operations-runbook.
 
 - `src/temporal/workflow-registry.ts` is the code-owned registry of deployable
   workflow definitions.
-- `src/temporal/forms.ts` contains the serializable workflow form vocabulary.
+- `src/lib/forms.ts` contains the serializable form vocabulary shared by workflow
+  registrations and integration providers (`src/temporal/forms.ts` re-exports it).
 - `src/lib/workflowSync.ts` syncs code facts from the registry on startup.
 - `src/models/workflowDefinition.model.ts` is the only Prisma wrapper for
   workflow definitions, role policy, and integration requirements.
@@ -115,9 +116,18 @@ idempotency keys.
   duplicating external work. Stale `RUNNING` claims are recoverable after the
   admin-managed `ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES` cutoff through an
   atomic model-layer takeover.
-- `src/integrations/provider-registry.ts` is the code-owned provider registry.
-  Provider registrations declare config/credential schemas, test behavior,
-  redaction, and Activity adapters.
+- `src/integrations/index.ts` is the code-owned, typed provider registry. Each
+  provider is a module under `src/integrations/providers/<name>/`
+  (`schemas.ts`, `adapter.ts`, `index.ts`, `README.md`; copy `synthetic-echo`)
+  built with `defineIntegrationProvider`. A registration declares
+  config/credential schemas and forms, test behavior, redaction, the adapter
+  factory, and `operations`: per-operation `retrySafe`,
+  `supportsProviderIdempotencyKey`, `responseRetentionDays`, and `dataClasses`.
+  Add the provider to the `integrationProviders` tuple so
+  `IntegrationProviderKey`, `AdapterFor<K>`, and `OperationFor<K>` pick it up.
+  Provider modules must not import services, models, Prisma, config, or Temporal
+  code (enforced by `npm run check:architecture`).
+  `src/integrations/provider-registry.ts` is a deprecated re-export.
 - `src/services/integration.service.ts` owns admin connection CRUD, credential
   rotation/testing, binding validation, workflow-start availability checks, and
   audit redaction.
@@ -129,16 +139,32 @@ idempotency keys.
   The views live under `src/views/admin/integrations/`.
 
 When a Workflow needs an external integration, add an integration requirement
-to the workflow registration. The Workflow should pass only non-secret
+to the workflow registration. Registrations are wrapped in `defineWorkflow(...)`
+so their keys stay literal types; `providerKey` must be a registered provider
+(tsc) and `capabilityKey` a declared capability (checked by
+`validateWorkflowRegistry` at boot). In Workflow code, pin each requirement key
+to the workflow's own declaration with a type-only import:
+`requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"platform.test">`.
+Workflow modules may import `src/integrations/**` and `workflow-registry.ts` as
+types only. Compile-time negative tests live in `tests/types/` and run as part
+of `npm run typecheck`. The Workflow should pass only non-secret
 requirement keys and business payloads to Activities. The Activity calls the
 provider through `runIntegrationOperation` in
 `src/temporal/activities/integration-activity.ts` and returns only non-secret
 output to the Workflow. Never put provider credentials into Workflow input,
 signal payloads, queries, state summaries, or Temporal history.
 
-`runIntegrationOperation({ orgId, workflowDefinitionKey, requirementKey, scope,
-idempotencyKey, request }, (resolved, operationKey) => ..., policy)` is the only
-supported shape for integration Activities (copy `runSyntheticIntegration`):
+`runIntegrationOperation({ orgId, workflowDefinitionKey, requirementKey,
+providerKey, operation, scope, idempotencyKey, request }, ({ adapter,
+connection }, operationKey) => ..., policy)` is the only supported shape for
+integration Activities (copy `runSyntheticIntegration`). Everything is typed:
+`providerKey` must be registered, `operation` must be declared by that provider,
+`requirementKey` must be declared by some workflow, and `adapter` is
+`AdapterFor<providerKey>`; never cast adapters (ESLint rejects `as *Adapter` in
+`src/temporal/activities/`). `retrySafe` comes from the declared operation, so
+`policy` only carries `classifyError`, `reconcile`, and `providerReceiptId`.
+The resolver rejects an Activity whose `providerKey` differs from the
+requirement's declared provider. Further:
 - it resolves the binding through `integration-resolver.service.ts` **before**
   reserving an `ActivityIdempotency` row, so configuration errors never leave
   RUNNING/UNCERTAIN reservations;

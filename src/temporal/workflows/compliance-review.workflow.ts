@@ -2,6 +2,7 @@ import { condition, setHandler, workflowInfo } from "@temporalio/workflow";
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { complianceReviewStateQuery, complianceReviewControlActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type ComplianceReviewStatus, type ComplianceControlStatus, type ComplianceReviewWorkflowInput, type ComplianceControlState, type ComplianceReviewState, complianceTerminal } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function complianceReviewWorkflow(
   input: ComplianceReviewWorkflowInput,
@@ -33,7 +34,7 @@ export async function complianceReviewWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.complianceReview">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.controlId ?? payload.reviewId ?? "review")}`,
       payload,

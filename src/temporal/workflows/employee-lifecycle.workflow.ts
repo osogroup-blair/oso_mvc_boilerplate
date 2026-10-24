@@ -2,6 +2,7 @@ import { condition, isCancellation, setHandler, sleep, workflowInfo } from "@tem
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { employeeLifecycleStateQuery, employeeLifecycleChecklistActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type EmployeeLifecycleStatus, type EmployeeLifecycleWorkflowInput, type EmployeeLifecycleState, allEmployeeSystems, createEmployeeSystemState } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function employeeLifecycleWorkflow(
   input: EmployeeLifecycleWorkflowInput,
@@ -45,7 +46,7 @@ export async function employeeLifecycleWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.employeeLifecycle">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.system ?? payload.employeeId ?? "all")}`,
       payload,
