@@ -1,6 +1,6 @@
 # Workflow Integrations Hardening Plan
 
-**Status:** Phase 1 source complete (2026-10-24; component tests only, see §4 Phase 1 implementation notes). Phases 2–7 not started.
+**Status:** Phase 1 complete and owned-stack accepted (2026-10-24; see §4 Phase 1 implementation notes). Phases 2–7 not started.
 **Baseline:** `0dc7d01` (`Integrate platform reliability improvements and clean up documentation`)
 **Scope:** fix correctness and security gaps in the integration platform
 (providers, connections, bindings, resolvers, Activity idempotency). Make the
@@ -175,12 +175,30 @@ a connection is usable, and configuration errors fail fast.
   **deferred**: nothing writes `WorkflowExecution.error` today, so that needs
   failure-detail ingestion from Temporal history, which is out of Phase 1 scope.
   The non-retryable failure type and message are visible in Temporal UI.
-- Not yet run: owned-SQL verification of the `updateTestResult` CAS, a live
-  Temporal run showing non-retryable `INTEGRATION_*` failures, and browser
-  acceptance of the new status/reason rendering. `temporal:replay` is BLOCKED
-  on the empty reviewed-history corpus (pre-existing). Workflow code changed only
-  by importing new runtime constants from `contracts.ts`, and no Workflow
-  imports them yet.
+- **Owned-stack acceptance (2026-10-24, run `0fe8fe59-2cc5-45dc-86b7-ec5a63ee64fd`):**
+  `npm run test:platform:owned -- --browser --temporal` PASS on every stage
+  (migrate, integration, browser, worker-process, integration-failures,
+  reliability, transport, restore-failure). Phase 1 coverage added for it:
+  - `tests/integration/workflow-integrations.test.ts` (owned SQL): gate and
+    resolver agree on real rows (healthy, `disabledAt` with stale `ACTIVE`,
+    binding disabled, connection soft-deleted); test and rotate keep `DISABLED`;
+    the `updateTestResult` CAS discards a result when credentials rotate
+    mid-test; scrubbed test message and audit, with the secret still
+    decryptable;
+  - `tests/acceptance/integration-failures.mjs` (new runner stage, real built
+    Worker): a disabled binding and a `disabledAt` connection each fail the
+    workflow with non-retryable `INTEGRATION_DISABLED` /
+    `INTEGRATION_CONNECTION_UNAVAILABLE` on attempt 1, with zero
+    `ActivityIdempotency` rows; a healthy binding completes with one `SUCCEEDED`
+    row; the secret appears in neither history nor stored response;
+  - `tests/acceptance/full-browser.mjs`: Disable then Test Connection through
+    real CSRF forms keeps `DISABLED`; the start and bindings pages show
+    `CONNECTION_UNAVAILABLE` with its reason and block launch; the operations
+    dashboard flags an active schedule (`integration-health.png`).
+
+  Playwright 1.63.0 (global, via `NODE_PATH`) was used rather than the
+  documented 1.62.1. `temporal:replay` remains BLOCKED on the empty
+  reviewed-history corpus (pre-existing).
 
 **Phase 1 acceptance:** the parity test passes; no disabled connection reports
 `AVAILABLE`; config errors produce zero idempotency rows and zero retries;

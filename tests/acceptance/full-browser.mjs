@@ -80,6 +80,41 @@ try{
   const changed={...form,_adminOperationId:crypto.randomUUID()};const stale=await context.request.post(target,{form:changed});assert.equal(stale.status(),409);
   assert(before);results.push(`${kind}: typed nested form, validation recovery, CAS and replay`);
  }
+ // Integrations hardening Phase 1 (INT-01/02/05) through the real admin UI, CSRF forms and owned SQL.
+ {
+  const seeded=await prisma.integrationConnection.findFirstOrThrow({where:{name:"Seed Synthetic Echo",deletedAt:null}});
+  assert(memberships.some(m=>m.orgId===seeded.orgId),"alice belongs to the seeded integration org");
+  const integrationOrg=seeded.orgId;const platformTest=await prisma.workflowDefinition.findUniqueOrThrow({where:{key:"platform.test"}});
+  const postForm=async(button)=>{await Promise.all([page.waitForResponse(r=>r.request().method()==="POST"),button.click()]);await page.waitForLoadState("load");};
+  const scheduleName=`Owned integration health ${manifest.runId}`;
+  try{
+   assert.equal((await page.goto(`${base}/workflows/${platformTest.slug}?orgId=${integrationOrg}`)).status(),200);
+   assert(await page.getByText("AVAILABLE",{exact:true}).first().isVisible(),"healthy binding renders AVAILABLE");
+   await page.goto(`${base}/admin/integrations/${seeded.id}?orgId=${integrationOrg}`);
+   await postForm(page.getByRole("button",{name:"Disable",exact:true}));
+   let row=await prisma.integrationConnection.findUniqueOrThrow({where:{id:seeded.id}});assert.equal(row.status,"DISABLED");assert(row.disabledAt);
+   await postForm(page.getByRole("button",{name:"Test Connection",exact:true}));
+   row=await prisma.integrationConnection.findUniqueOrThrow({where:{id:seeded.id}});
+   assert.equal(row.status,"DISABLED","testing a disabled connection keeps it DISABLED");assert(row.disabledAt);assert.equal(row.lastTestStatus,"SUCCEEDED");
+   assert(!page.url().includes("seed-synthetic-token")&&!(await page.content()).includes("seed-synthetic-token"),"no credential in redirect or page");
+   await page.goto(`${base}/workflows/${platformTest.slug}?orgId=${integrationOrg}`);
+   assert(await page.getByText("CONNECTION_UNAVAILABLE",{exact:true}).first().isVisible(),"start page shows CONNECTION_UNAVAILABLE");
+   assert(await page.getByText("Integration connection is unavailable").first().isVisible(),"start page shows reason");
+   assert(await page.getByText("An administrator must bind active connections").isVisible(),"start page blocks launch");
+   await page.goto(`${base}/admin/integrations/workflow-bindings/${platformTest.id}?orgId=${integrationOrg}`);
+   assert(await page.getByText("Integration connection is unavailable").first().isVisible(),"bindings page shows reason");
+   await prisma.workflowSchedule.create({data:{orgId:integrationOrg,workflowDefinitionId:platformTest.id,createdById:alice.id,scheduleId:`owned-${manifest.runId}`,name:scheduleName,cronExpression:"0 * * * *"}});
+   await page.goto(`${base}/admin/workflow-operations?orgId=${integrationOrg}`);
+   assert(await page.getByText("Schedules with unavailable integrations").isVisible(),"operations lists schedule binding issues");
+   assert(await page.getByText("binding unavailable").first().isVisible());
+   assert.equal(await page.locator(`a[href="/admin/integrations/workflow-bindings/${platformTest.id}?orgId=${integrationOrg}"]`).count(),1,"fix-bindings link");
+   await page.screenshot({path:resolve(root,"integration-health.png"),fullPage:true});
+   results.push("integrations Phase 1: disable + test keeps DISABLED via real CSRF forms; start/bindings pages show CONNECTION_UNAVAILABLE with reason; operations flags the schedule");
+  }finally{
+   await prisma.workflowSchedule.updateMany({where:{orgId:integrationOrg,name:scheduleName},data:{deletedAt:new Date(),status:"DELETED"}});
+   await prisma.integrationConnection.update({where:{id:seeded.id},data:{status:"ACTIVE",disabledAt:null}});
+  }
+ }
  await writeFile(resolve(root,"browser-identity.json"),JSON.stringify({pid:chrome.pid,expectedProfile:profile,expectedPort:manifest.browserPort,args:(await readFile(`/proc/${chrome.pid}/cmdline`,"utf8")).split("\0")},null,2));
  for(const script of ["browser-acceptance-test.mjs","upload-smoke-test.mjs"]){
   const result=await new Promise(resolve=>{const task=spawn(process.execPath,[`tests/acceptance/${script}`],{env:{...process.env,APP_BASE_URL:base},stdio:["ignore","pipe","pipe"]});let stdout="",stderr="";task.stdout.on("data",b=>stdout+=b);task.stderr.on("data",b=>stderr+=b);const timer=setTimeout(()=>task.kill("SIGKILL"),90000);task.once("exit",status=>{clearTimeout(timer);resolve({status,stdout,stderr});});});

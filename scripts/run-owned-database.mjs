@@ -82,7 +82,7 @@ try {
     ["migrate", ["node_modules/prisma/build/index.js", "migrate", "deploy"]],
     ["integration", ["node_modules/vitest/vitest.mjs", "run", "--config", "vitest.platform-integration.config.ts", "--maxWorkers=1", "--minWorkers=1"]],
     ...(browser ? [["browser", ["tests/acceptance/full-browser.mjs"]]] : []),
-    ...(temporal ? [["worker-process", ["tests/acceptance/worker-process.mjs"]], ["reliability", ["tests/acceptance/temporal-reliability.mjs"]], ["transport", ["tests/acceptance/transport-verification.mjs"]], ["restore-failure", ["tests/acceptance/restore-and-failure.mjs"]]] : []),
+    ...(temporal ? [["worker-process", ["tests/acceptance/worker-process.mjs"]], ["integration-failures", ["tests/acceptance/integration-failures.mjs"]], ["reliability", ["tests/acceptance/temporal-reliability.mjs"]], ["transport", ["tests/acceptance/transport-verification.mjs"]], ["restore-failure", ["tests/acceptance/restore-and-failure.mjs"]]] : []),
   ]) {
     const stageEnv = { ...env };
     if (stage === "integration") delete stageEnv.DATABASE_URL;
@@ -93,7 +93,7 @@ try {
     if (result.status !== 0) throw Error(`${stage} failed; inspect sanitized artifacts`);
     console.log(`${stage}: PASS`);
   }
-  await writeFile(resolve(directory, "result.json"), JSON.stringify({ runId, image: detail.Image, result: "PASS", scope: temporal ? "Owned PostgreSQL/browser/Redis, Worker lifecycle, reliability/replay, transport, restore and failure verification" : browser ? "Owned PostgreSQL/browser/Redis verification" : "PostgreSQL integration only" }, null, 2) + "\n");
+  await writeFile(resolve(directory, "result.json"), JSON.stringify({ runId, image: detail.Image, result: "PASS", scope: temporal ? "Owned PostgreSQL/browser/Redis, Worker lifecycle, integration failure semantics, reliability/replay, transport, restore and failure verification" : browser ? "Owned PostgreSQL/browser/Redis verification" : "PostgreSQL integration only" }, null, 2) + "\n");
   console.log(`Evidence: ${directory}`);
 } catch (error) {
   console.error(error instanceof Error ? error.message.replaceAll(password, "[REDACTED]") : "Owned fixture failed");
