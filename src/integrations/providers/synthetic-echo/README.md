@@ -23,6 +23,8 @@ Activity-side resolution, and idempotent replay. It is the binding target for
 - `schemas.ts`: Zod credential and config schemas.
 - `adapter.ts`: `SyntheticEchoAdapter` interface and factory.
 - `index.ts`: the provider registration (forms, validation, test, adapter, redaction, operations).
+- `contract.fixture.ts`: inputs for the provider contract suite (`tests/providers/`).
 
-Do not copy this provider's `retrySafe: true` for a provider with real side
-effects; see `skills/SKILL-temporal.md` (Phase 4 integration shape).
+Do not copy this provider for real network integrations; copy
+`webhook-outbound` instead (egress policy, shared HTTP client, signed requests,
+provider idempotency keys, error classification).

@@ -1,6 +1,6 @@
 # Workflow Integrations Hardening Plan
 
-**Status:** Phase 1 complete and owned-stack accepted; Phase 2 source complete (2026-10-24; see the implementation notes under each phase). Phases 3–7 not started.
+**Status:** Phases 1–3 complete and owned-stack accepted (2026-10-24; see the implementation notes under each phase). Phases 4–7 not started.
 **Baseline:** `0dc7d01` (`Integrate platform reliability improvements and clean up documentation`)
 **Scope:** fix correctness and security gaps in the integration platform
 (providers, connections, bindings, resolvers, Activity idempotency). Make the
@@ -340,6 +340,52 @@ every provider must pass.
   - the egress policy is declared whenever the provider uses `http.ts`.
 - A provider with no fixture file fails the suite with a message telling the
   author what to add.
+
+**Phase 3 implementation notes (2026-10-24):**
+- INT-09: `src/integrations/http.ts` is built on `node:http(s)` rather than
+  `fetch`, so the private-address check runs inside the socket's DNS lookup
+  (`guardedLookup`). That also blocks hostnames that resolve or rebind to
+  private addresses. "allow private network" is the platform env key
+  `INTEGRATION_ALLOW_PRIVATE_EGRESS` (refused in production by config
+  validation), not a provider registration flag: a reference provider must not
+  be able to opt itself out of SSRF protection. Services inject it as
+  `ProviderRuntime` (`integration-runtime.ts`), since providers may not read
+  config. Plain `http:` is allowed only with that flag. The client also caps
+  responses (64 KiB), logs only method, host, path, status and timing, and
+  rejects (never throws synchronously).
+- INT-10: `webhook.outbound` signs `"<timestamp>.<body>"` (header
+  `X-Webhook-Signature: v1=…`) and declares `dataClasses: ["pii"]` and 30-day
+  retention. Terminal provider errors now become non-retryable
+  `INTEGRATION_PROVIDER_REJECTED` in `runIntegrationOperation`. The data-sync
+  workflow's billing notification is an **optional** requirement
+  (`billingWebhook`, gated by `patched("data-sync-billing-webhook-v1")`) that
+  skips on `INTEGRATION_UNAVAILABLE_TYPES`. Data sync reports a provider
+  rejection as `status: "failed"` in its returned state, per its existing
+  failure contract. The mock receiver is `tests/fixtures/mock-webhook-server.mjs`
+  (`.mjs` so acceptance scripts can import it), also exposed as
+  `npm run mock:webhook`. The seed adds a disabled "Seed Billing Webhook (local
+  mock)" connection and binding.
+- INT-11: the suite lives in `tests/providers/` (not `tests/integrations/`,
+  to avoid confusion with the excluded `tests/integration/`). Fixtures are
+  discovered with `import.meta.glob`. A negative-control run (a provider that
+  leaks its secret in the test message and omits `egress`) failed exactly
+  those two checks. The rule against direct network calls from providers
+  (`fetch`, `node:http(s)`, `net`, `dns`, `undici`) is pulled forward from
+  INT-19 into `check:architecture`.
+- **Owned-stack acceptance:** run `f74b5be3-e619-4295-9cb5-404301510f52`
+  (`--browser --temporal`) PASS on every stage, including the new
+  `webhook-delivery` stage (`tests/acceptance/webhook-delivery.mjs`, real built
+  Worker plus mock receiver):
+  - injected 503: one Temporal retry, exactly one processed delivery;
+  - receiver processed then returned 500: the retry reused the
+    `Idempotency-Key`, the receiver deduplicated, exactly one processed
+    delivery, `duplicate: true` in workflow state;
+  - binding disabled: skipped with `INTEGRATION_DISABLED`, no request, no
+    reservation;
+  - wrong signing secret: non-retryable `INTEGRATION_PROVIDER_REJECTED` on
+    attempt 1.
+
+  No secrets appear in history, stored responses or logs.
 
 **Phase 3 acceptance:** `webhook.outbound` delivers against the mock server in a
 platform integration test with Temporal (retry after an injected 503 produces

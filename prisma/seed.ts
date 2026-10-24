@@ -619,6 +619,57 @@ async function main() {
     });
   }
 
+  // Optional billing webhook for showcase.dataSynchronization (webhook.outbound
+  // reference provider). Seeded DISABLED and pointed at the local mock receiver
+  // (`npm run mock:webhook`, needs INTEGRATION_ALLOW_PRIVATE_EGRESS=true), so the
+  // workflow records "skipped" until an admin enables the binding.
+  await prisma.workflowIntegrationRequirement.upsert({
+    where: { workflowDefinitionId_key: { workflowDefinitionId: dataSynchronizationDefinition.id, key: "billingWebhook" } },
+    update: { providerKey: "webhook.outbound", capabilityKey: "deliver", label: "Billing Webhook", isRequired: false, deletedAt: null },
+    create: {
+      workflowDefinitionId: dataSynchronizationDefinition.id,
+      key: "billingWebhook",
+      providerKey: "webhook.outbound",
+      capabilityKey: "deliver",
+      label: "Billing Webhook",
+      description: "Optional signed webhook notified after the billing target syncs. Skipped while unbound or disabled.",
+      isRequired: false,
+    },
+  });
+  const webhookCredentials = credentialEncryptionService.encrypt({ signingSecret: "seed-webhook-signing-secret" });
+  const webhookConfig = { baseUrl: "http://127.0.0.1:4010", path: "/webhooks/billing", extraHeaders: {} };
+  const webhookConnection = await prisma.integrationConnection.upsert({
+    where: { orgId_name: { orgId: defaultOrg.id, name: "Seed Billing Webhook (local mock)" } },
+    update: { providerKey: "webhook.outbound", config: webhookConfig, ...webhookCredentials, deletedAt: null },
+    create: {
+      orgId: defaultOrg.id,
+      name: "Seed Billing Webhook (local mock)",
+      providerKey: "webhook.outbound",
+      status: "ACTIVE",
+      config: webhookConfig,
+      ...webhookCredentials,
+      lastTestStatus: "NOT_TESTED",
+      lastTestMessage: "Start `npm run mock:webhook`, then run a connection test.",
+    },
+  });
+  await prisma.workflowIntegrationBinding.upsert({
+    where: {
+      orgId_workflowDefinitionId_requirementKey: {
+        orgId: defaultOrg.id,
+        workflowDefinitionId: dataSynchronizationDefinition.id,
+        requirementKey: "billingWebhook",
+      },
+    },
+    update: { connectionId: webhookConnection.id, deletedAt: null },
+    create: {
+      orgId: defaultOrg.id,
+      workflowDefinitionId: dataSynchronizationDefinition.id,
+      requirementKey: "billingWebhook",
+      connectionId: webhookConnection.id,
+      isEnabled: false,
+    },
+  });
+
   for (const capability of ["START", "VIEW", "ACT", "CANCEL", "ADMIN"] as const) {
     for (const definition of [
       heartbeatDefinition,

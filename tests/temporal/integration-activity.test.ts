@@ -8,7 +8,7 @@ import {
   toIntegrationConfigurationFailure,
 } from "../../src/temporal/activities/integration-activity.js";
 import { INTEGRATION_FAILURE_TYPES, isIntegrationConfigurationFailure } from "../../src/temporal/contracts.js";
-import { getIntegrationProvider } from "../../src/integrations/index.js";
+import { classifyProviderError, getIntegrationProvider, ProviderHttpError } from "../../src/integrations/index.js";
 
 const input = {
   orgId: "org-1",
@@ -117,6 +117,27 @@ describe("runIntegrationOperation", () => {
 
     await expect(run(input, vi.fn().mockRejectedValue(providerError))).rejects.toBe(providerError);
     expect(deps.idempotency.run).toHaveBeenCalled();
+  });
+});
+
+describe("runIntegrationOperation provider rejections", () => {
+  it("turns a terminal provider error into a non-retryable INTEGRATION_PROVIDER_REJECTED", async () => {
+    const deps = makeDeps();
+    const run = createIntegrationOperationRunner(deps as never);
+    const rejected = ProviderHttpError.fromStatus(400);
+
+    const error = await run(input, vi.fn().mockRejectedValue(rejected), { classifyError: classifyProviderError }).catch((err: unknown) => err);
+
+    expect(error).toBeInstanceOf(ApplicationFailure);
+    expect(error).toMatchObject({ nonRetryable: true, type: INTEGRATION_FAILURE_TYPES.PROVIDER_REJECTED });
+    expect((error as Error).message).toContain("HTTP 400");
+  });
+
+  it("keeps retryable and uncertain provider errors retryable", async () => {
+    for (const providerError of [ProviderHttpError.fromStatus(503), new ProviderHttpError("TIMEOUT", "timeout", { sent: true })]) {
+      const run = createIntegrationOperationRunner(makeDeps() as never);
+      await expect(run(input, vi.fn().mockRejectedValue(providerError), { classifyError: classifyProviderError })).rejects.toBe(providerError);
+    }
   });
 });
 

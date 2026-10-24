@@ -103,8 +103,11 @@ src/
 
   integrations/
     index.ts               Typed provider registry (integrationProviders tuple) plus IntegrationProviderKey/AdapterFor/OperationFor types.
-    types.ts               IntegrationProviderRegistration, ProviderOperation (retrySafe, idempotency-key support, retention, data classes), defineIntegrationProvider.
-    providers/<name>/      One module per provider: schemas.ts (Zod), adapter.ts (adapter interface + factory), index.ts (registration), README.md.
+    types.ts               IntegrationProviderRegistration, ProviderOperation (retrySafe, idempotency-key support, retention, data classes), egress, defineIntegrationProvider.
+    http.ts                Shared egress client: host policy, private-network/DNS-rebinding block, timeouts, response cap, safe logging, ProviderHttpError + classifyProviderError.
+    contract.ts            ProviderContractFixture type for the provider contract suite (tests/providers/).
+    providers/<name>/      One module per provider: schemas.ts (Zod), adapter.ts (adapter interface + factory), index.ts (registration), contract.fixture.ts, README.md.
+                           synthetic-echo (no network) and webhook-outbound (reference for real HTTP: signed, Idempotency-Key, classified errors).
     provider-registry.ts   Deprecated re-export of index.ts, kept for one release.
     availability.ts        Single binding/connection availability evaluator shared by start gating, Activity resolvers, and operations; IntegrationUnavailableError.
     safety.ts              Provider-call guards: timeout with AbortSignal and credential-value scrubbing for stored/audited messages.

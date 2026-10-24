@@ -21,6 +21,10 @@ describe("architecture boundaries", () => {
     expect(checkSource("src/integrations/index.ts", 'import { activities } from "../temporal/activities/index.js";')).toHaveLength(1);
     expect(checkSource("src/integrations/providers/example/index.ts", 'import { z } from "zod";')).toEqual([]);
     expect(checkSource("src/integrations/availability.ts", 'import { AppError } from "../lib/AppError.js";')).toEqual([]);
+    expect(checkSource("src/integrations/providers/example/adapter.ts", 'import { request } from "node:https";')).toHaveLength(1);
+    expect(checkSource("src/integrations/providers/example/adapter.ts", 'await fetch("https://api.example.com");')).toHaveLength(1);
+    expect(checkSource("src/integrations/providers/example/adapter.ts", 'import { createHmac } from "node:crypto";')).toEqual([]);
+    expect(checkSource("src/integrations/http.ts", 'import { request } from "node:https";')).toEqual([]);
   });
 
   it("permits types/enums and the narrow cleanup seam without permitting arbitrary queries", () => {

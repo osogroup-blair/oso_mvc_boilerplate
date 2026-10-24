@@ -5,6 +5,7 @@ import { IntegrationUnavailableError } from "../../integrations/availability.js"
 import {
   integrationResolverService,
   type IntegrationResolverService,
+  type ResolvedIntegration,
 } from "../../services/integration-resolver.service.js";
 import {
   activityIdempotencyService,
@@ -13,7 +14,7 @@ import {
 } from "../../services/activity-idempotency.service.js";
 import {
   getIntegrationProvider,
-  type AdapterFor,
+  ProviderHttpError,
   type IntegrationProviderKey,
   type IntegrationProviderRegistration,
   type OperationFor,
@@ -36,9 +37,7 @@ export interface IntegrationOperationInput<K extends IntegrationProviderKey> {
   request: unknown;
 }
 
-export type ResolvedIntegration<K extends IntegrationProviderKey> = Awaited<ReturnType<IntegrationResolverService["resolve"]>> & {
-  adapter: AdapterFor<K>;
-};
+export type { ResolvedIntegration } from "../../services/integration-resolver.service.js";
 
 /** Retry safety comes from the provider's declared operation, never from the call site. */
 export type IntegrationOperationPolicy<T> = Omit<ActivityOperationPolicy<T>, "retrySafe">;
@@ -114,14 +113,27 @@ export function createIntegrationOperationRunner(
       throw failure;
     }
 
-    return deps.idempotency.run(
-      input.orgId,
-      input.scope,
-      input.idempotencyKey,
-      input.request,
-      (operationKey) => operation(resolved, operationKey),
-      { ...policy, retrySafe: declared.retrySafe }
-    );
+    try {
+      return await deps.idempotency.run(
+        input.orgId,
+        input.scope,
+        input.idempotencyKey,
+        input.request,
+        (operationKey) => operation(resolved, operationKey),
+        { ...policy, retrySafe: declared.retrySafe }
+      );
+    } catch (error) {
+      // A definitive provider rejection is recorded FAILED by the idempotency
+      // service; stop Temporal from retrying into "operator review required".
+      if (policy.classifyError?.(error) === "terminal") {
+        const reason = error instanceof ProviderHttpError ? error.message : "provider rejected the request";
+        throw ApplicationFailure.nonRetryable(
+          `${input.providerKey}.${input.operation}: ${reason}`,
+          INTEGRATION_FAILURE_TYPES.PROVIDER_REJECTED
+        );
+      }
+      throw error;
+    }
   };
 }
 

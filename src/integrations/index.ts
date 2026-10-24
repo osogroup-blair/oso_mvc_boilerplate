@@ -1,16 +1,27 @@
 import type { IntegrationProviderRegistration } from "./types.js";
 import { syntheticEchoProvider } from "./providers/synthetic-echo/index.js";
+import { webhookOutboundProvider } from "./providers/webhook-outbound/index.js";
 
 export * from "./types.js";
+export {
+  assertEgressAllowed,
+  classifyProviderError,
+  createProviderHttpClient,
+  isPrivateAddress,
+  ProviderHttpError,
+  type ProviderHttpClient,
+} from "./http.js";
 export { syntheticEchoProvider } from "./providers/synthetic-echo/index.js";
 export type { SyntheticEchoAdapter } from "./providers/synthetic-echo/index.js";
+export { webhookOutboundProvider, signWebhookBody } from "./providers/webhook-outbound/index.js";
+export type { WebhookDeliveryResult, WebhookOutboundAdapter } from "./providers/webhook-outbound/index.js";
 
 /**
  * Code-owned provider registry. Add a provider by creating
  * providers/<name>/{schemas,adapter,index}.ts + README.md and listing it here;
  * the literal tuple keeps provider keys, adapters and operations typed.
  */
-export const integrationProviders = [syntheticEchoProvider] as const;
+export const integrationProviders = [syntheticEchoProvider, webhookOutboundProvider] as const;
 
 type RegisteredProvider = (typeof integrationProviders)[number];
 export type IntegrationProviderKey = RegisteredProvider["key"];

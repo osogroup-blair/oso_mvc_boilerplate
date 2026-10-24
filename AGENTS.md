@@ -145,8 +145,13 @@ Workflow integration requirements are declared in
 organization connections and requirement bindings at `/admin/integrations`.
 Provider definitions live in `src/integrations/providers/<name>/` and are
 listed in the typed registry `src/integrations/index.ts`; they declare
-credential/config schemas, test behavior, redaction, Activity adapters, and
-per-operation retry semantics (`operations`).
+credential/config schemas, test behavior, redaction, Activity adapters,
+per-operation retry semantics (`operations`), and an `egress` policy. Copy
+`webhook-outbound` for real HTTP providers: all network calls go through
+`src/integrations/http.ts`. Every provider needs a `contract.fixture.ts`; the
+contract suite in `tests/providers/` runs automatically for every registered
+provider. `INTEGRATION_ALLOW_PRIVATE_EGRESS` (dev/test only, refused in
+production) is the only way a provider may reach loopback/private hosts.
 
 Credentials are infrastructure secrets. They are encrypted by
 `credential-encryption.service.ts` using config from `src/config/index.ts`,

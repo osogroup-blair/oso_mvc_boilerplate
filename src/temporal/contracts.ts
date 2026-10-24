@@ -90,7 +90,17 @@ export const INTEGRATION_FAILURE_TYPES = {
   CAPABILITY_MISSING: "INTEGRATION_CAPABILITY_MISSING",
   CONFIG_INVALID: "INTEGRATION_CONFIG_INVALID",
   RESOLUTION_FAILED: "INTEGRATION_RESOLUTION_FAILED",
+  /** The provider definitively rejected the request (e.g. HTTP 4xx); retrying cannot help. */
+  PROVIDER_REJECTED: "INTEGRATION_PROVIDER_REJECTED",
 } as const;
+
+/** Failures that mean "this integration is not available here"; optional requirements may skip on these. */
+export const INTEGRATION_UNAVAILABLE_TYPES: readonly string[] = [
+  INTEGRATION_FAILURE_TYPES.MISSING,
+  INTEGRATION_FAILURE_TYPES.DISABLED,
+  INTEGRATION_FAILURE_TYPES.CONNECTION_NOT_FOUND,
+  INTEGRATION_FAILURE_TYPES.CONNECTION_UNAVAILABLE,
+];
 
 export type IntegrationFailureType = (typeof INTEGRATION_FAILURE_TYPES)[keyof typeof INTEGRATION_FAILURE_TYPES];
 
@@ -115,8 +125,27 @@ export interface RunSyntheticIntegrationResult {
   replayed: boolean;
 }
 
+export interface DeliverIntegrationWebhookInput {
+  orgId: string;
+  workflowDefinitionKey: string;
+  /** Checked against every requirement declared in workflow-registry.ts. */
+  requirementKey: IntegrationRequirementKey;
+  idempotencyKey: string;
+  event: string;
+  /** Business payload only: identifiers and safe fields, never credentials. */
+  payload: Record<string, unknown>;
+}
+
+export interface DeliverIntegrationWebhookResult {
+  status: number;
+  deliveryId: string | null;
+  duplicate: boolean;
+  replayed: boolean;
+}
+
 export interface IntegrationActivities {
   runSyntheticIntegration(input: RunSyntheticIntegrationInput): Promise<RunSyntheticIntegrationResult>;
+  deliverIntegrationWebhook(input: DeliverIntegrationWebhookInput): Promise<DeliverIntegrationWebhookResult>;
 }
 
 export interface RunShowcaseSyntheticStepInput {

@@ -1,4 +1,7 @@
 import type { FormDefinition } from "../lib/forms.js";
+import type { ProviderEgressPolicy, ProviderRuntime } from "./http.js";
+
+export type { ProviderEgressPolicy, ProviderRuntime } from "./http.js";
 
 export interface IntegrationTestResult {
   ok: boolean;
@@ -34,6 +37,8 @@ export interface IntegrationProviderRegistration<
   description?: string;
   capabilities: readonly string[];
   operations: Readonly<Record<TOperation, ProviderOperation>>;
+  /** Required for any provider that makes network calls (through http.ts); omit only for no-network providers. */
+  egress?: ProviderEgressPolicy;
   credentialForm: FormDefinition;
   configForm: FormDefinition;
   validateCredentials(input: unknown): Record<string, unknown>;
@@ -43,11 +48,13 @@ export interface IntegrationProviderRegistration<
     credentials: Record<string, unknown>;
     config: Record<string, unknown>;
     signal?: AbortSignal;
+    runtime: ProviderRuntime;
   }): Promise<IntegrationTestResult>;
   createAdapter(input: {
     credentials: Record<string, unknown>;
     config: Record<string, unknown>;
     connectionId: string;
+    runtime: ProviderRuntime;
   }): TAdapter;
   redactConfig(config: Record<string, unknown>): Record<string, unknown>;
   /** Optional provider-specific scrubbing of test messages, applied after credential-value scrubbing. */

@@ -1,6 +1,6 @@
-import { setHandler, workflowInfo } from "@temporalio/workflow";
-import type { PlatformWorkflowContext } from "../contracts.js";
-import { dataSynchronizationStateQuery, showcaseActivities, ensureWorkflowExecutionProjection, type DataSyncTarget, type DataSynchronizationWorkflowInput, type DataSynchronizationState, createDataSyncTargetState } from './shared.js';
+import { ActivityFailure, ApplicationFailure, patched, setHandler, workflowInfo } from "@temporalio/workflow";
+import { INTEGRATION_UNAVAILABLE_TYPES, type PlatformWorkflowContext } from "../contracts.js";
+import { dataSynchronizationStateQuery, showcaseActivities, integrations, ensureWorkflowExecutionProjection, type DataSyncTarget, type DataSynchronizationWorkflowInput, type DataSynchronizationState, type DataSynchronizationTargetState, createDataSyncTargetState } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
 import type { RequirementKeyFor } from "../workflow-registry.js";
 
@@ -39,6 +39,31 @@ export async function dataSynchronizationWorkflow(
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.target ?? payload.sourceRecordId ?? "all")}`,
       payload,
     });
+
+  // Optional integration: deliver when bound, skip (and record why) when the
+  // binding is missing/disabled/unavailable. Any other failure fails the workflow.
+  const notifyBillingWebhook = async (): Promise<DataSynchronizationTargetState["webhook"]> => {
+    try {
+      const delivery = await integrations.deliverIntegrationWebhook({
+        orgId: context.orgId,
+        workflowDefinitionKey: context.workflowDefinitionKey,
+        requirementKey: "billingWebhook" satisfies RequirementKeyFor<"showcase.dataSynchronization">,
+        idempotencyKey: `${info.workflowId}:billingWebhook:${input.eventId}`,
+        event: "customer.synced",
+        payload: {
+          eventId: input.eventId,
+          sourceRecordId: input.sourceRecordId,
+          externalRecordId: state.targets.billing.externalRecordId ?? null,
+          billingAccount: state.canonicalCustomer?.billingAccount ?? null,
+        },
+      });
+      return { status: "delivered", deliveryId: delivery.deliveryId, duplicate: delivery.duplicate, replayed: delivery.replayed };
+    } catch (error) {
+      const type = error instanceof ActivityFailure && error.cause instanceof ApplicationFailure ? error.cause.type : undefined;
+      if (type && INTEGRATION_UNAVAILABLE_TYPES.includes(type)) return { status: "skipped", reason: type };
+      throw error;
+    }
+  };
 
   try {
     state.status = "fetching_source";
@@ -94,6 +119,9 @@ export async function dataSynchronizationWorkflow(
       targetState.attempts = Number(result.echoed.attempts ?? 1);
       targetState.externalRecordId = String(result.echoed.externalRecordId ?? `${target}_ext_${input.sourceRecordId}`);
       targetState.lastSyncedAt = new Date().toISOString();
+      if (target === "billing" && patched("data-sync-billing-webhook-v1")) {
+        targetState.webhook = await notifyBillingWebhook();
+      }
     }));
     state.completedSteps.push(state.currentStep);
 

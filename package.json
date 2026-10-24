@@ -19,6 +19,7 @@
     "db:migrate": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:seed": "tsx prisma/seed.ts",
+    "mock:webhook": "node tests/fixtures/mock-webhook-server.mjs",
     "db:reset": "prisma migrate reset --force",
     "css:build": "tailwindcss -i ./src/views/styles.css -o ./public/css/app.css",
     "css:watch": "tailwindcss -i ./src/views/styles.css -o ./public/css/app.css --watch",

@@ -128,6 +128,29 @@ idempotency keys.
   Provider modules must not import services, models, Prisma, config, or Temporal
   code (enforced by `npm run check:architecture`).
   `src/integrations/provider-registry.ts` is a deprecated re-export.
+- Providers that touch the network (copy `providers/webhook-outbound`) must:
+  declare `egress` (`{ hosts: [...] }` or `{ hosts: "config.baseUrl" }`); make
+  every call through `createProviderHttpClient` in `src/integrations/http.ts`
+  with the injected `runtime` (never `fetch` or `node:http` directly; private,
+  loopback and DNS-rebound addresses are refused unless the platform sets
+  `INTEGRATION_ALLOW_PRIVATE_EGRESS`); throw `ProviderHttpError` for non-2xx;
+  send the Activity `operationKey` as the provider's idempotency key when the
+  operation declares `supportsProviderIdempotencyKey`; and return only safe,
+  minimal results (no response bodies, no credentials). Activities pass
+  `classifyProviderError` as `policy.classifyError`; terminal errors become
+  non-retryable `INTEGRATION_PROVIDER_REJECTED`.
+- Every provider ships `providers/<key with "." to "-">/contract.fixture.ts`
+  (`defineProviderContractFixture`). `tests/providers/all-providers.test.ts`
+  runs the shared contract for every registered provider: schemas reject bad
+  input; redacted config, test messages and operation results contain no
+  credential values; `testConnection` never throws and honours abort; operation
+  keys are sent when declared; egress is declared iff the provider makes
+  network calls.
+- Optional requirements (`isRequired: false`) do not gate starts. Workflow code
+  calls the Activity and treats `INTEGRATION_UNAVAILABLE_TYPES` (missing,
+  disabled, unavailable) as "skip and record why"; anything else fails
+  normally. See `notifyBillingWebhook` in `data-synchronization.workflow.ts`
+  (gated by `patched("data-sync-billing-webhook-v1")`).
 - `src/services/integration.service.ts` owns admin connection CRUD, credential
   rotation/testing, binding validation, workflow-start availability checks, and
   audit redaction.

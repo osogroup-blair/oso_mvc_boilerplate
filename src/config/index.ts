@@ -89,7 +89,13 @@ const envSchema = z.object({
   INTEGRATION_CREDENTIAL_KEY_VERSION: z.string().min(1).default("dev-v1"),
   INTEGRATION_CREDENTIAL_KEY: z.string().min(32).default("dev-only-integration-credential-key-00000000"),
   INTEGRATION_CREDENTIAL_KEY_RING: credentialKeyRingSchema,
+  // Lets integration providers reach loopback/private/link-local addresses and plain http.
+  // Local development and owned test fixtures only; refused in production.
+  INTEGRATION_ALLOW_PRIVATE_EGRESS: z.enum(["true", "false"]).default("false").transform(value => value === "true"),
 }).superRefine((value, ctx) => {
+  if (value.NODE_ENV === "production" && value.INTEGRATION_ALLOW_PRIVATE_EGRESS) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["INTEGRATION_ALLOW_PRIVATE_EGRESS"], message: "Production must not allow integration egress to private networks" });
+  }
   if (value.NODE_ENV === "production" && (!value.TEMPORAL_PAYLOAD_ENCRYPTION_ENABLED || value.INTEGRATION_CREDENTIAL_KEY.startsWith("dev-only-"))) {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["TEMPORAL_PAYLOAD_ENCRYPTION_ENABLED"], message: "Production requires payload encryption and a non-development master key" });
   }

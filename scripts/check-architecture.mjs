@@ -34,6 +34,8 @@ export function checkSource(file, text) {
     if (file.startsWith("src/integrations/") && (models || services || controllers || routes || target.startsWith("src/config/") || target.startsWith("src/temporal/")
       || target === "src/lib/prisma.js" || target === "src/lib/prisma"))
       add(node, "Integration providers receive config/credentials from resolvers; they must not import application layers, config, or Temporal code");
+    if (file.startsWith("src/integrations/providers/") && ["node:http", "node:https", "node:net", "node:dns", "http", "https", "net", "dns", "undici"].includes(specifier))
+      add(node, "Providers make network calls only through src/integrations/http.ts (createProviderHttpClient)");
     if ((target === "src/lib/prisma.js" || target === "src/lib/prisma") && !file.startsWith("src/models/")) {
       const clause = ts.isImportDeclaration(node) ? node.importClause : undefined;
       const cleanupOnly = clause?.namedBindings && ts.isNamedImports(clause.namedBindings) && !clause.name
@@ -46,6 +48,8 @@ export function checkSource(file, text) {
   }
   function visit(node) {
     if ((ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) inspectImport(node, node.moduleSpecifier.text);
+    if (file.startsWith("src/integrations/providers/") && ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "fetch")
+      add(node, "Providers make network calls only through src/integrations/http.ts (createProviderHttpClient)");
     if (ts.isCallExpression(node) && (node.expression.kind === ts.SyntaxKind.ImportKeyword || ts.isIdentifier(node.expression) && node.expression.text === "require") && node.arguments[0] && ts.isStringLiteral(node.arguments[0])) inspectImport(node, node.arguments[0].text);
     if (!file.startsWith("src/config/") && ((ts.isPropertyAccessExpression(node) && node.expression.getText(source) === "process" && node.name.text === "env")
       || (ts.isElementAccessExpression(node) && node.expression.getText(source) === "process" && node.argumentExpression && ts.isStringLiteral(node.argumentExpression) && node.argumentExpression.text === "env"))) add(node, "Read environment only through typed config");

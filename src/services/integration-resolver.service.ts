@@ -14,7 +14,7 @@ import {
   evaluateBindingAvailability,
   IntegrationUnavailableError,
 } from "../integrations/availability.js";
-import type { AdapterFor, IntegrationProviderKey } from "../integrations/index.js";
+import type { AdapterFor, IntegrationProviderKey, IntegrationProviderRegistration } from "../integrations/index.js";
 
 export interface ResolveIntegrationInput<K extends IntegrationProviderKey = IntegrationProviderKey> {
   orgId: string;
@@ -22,6 +22,14 @@ export interface ResolveIntegrationInput<K extends IntegrationProviderKey = Inte
   requirementKey: string;
   /** The provider the calling Activity is written against; types the returned adapter. */
   providerKey: K;
+}
+
+/** What an Activity receives: a provider-typed adapter plus safe connection metadata (never credentials). */
+export interface ResolvedIntegration<K extends IntegrationProviderKey> {
+  adapter: AdapterFor<K>;
+  provider: IntegrationProviderRegistration;
+  connection: { id: string; name: string; providerKey: string };
+  requirement: { key: string; capabilityKey: string | null };
 }
 
 export class IntegrationResolverService extends BaseService {
@@ -33,7 +41,7 @@ export class IntegrationResolverService extends BaseService {
     super("IntegrationResolverService");
   }
 
-  async resolve<K extends IntegrationProviderKey>(input: ResolveIntegrationInput<K>) {
+  async resolve<K extends IntegrationProviderKey>(input: ResolveIntegrationInput<K>): Promise<ResolvedIntegration<K>> {
     const binding = await this.bindings.findForRequirement(
       input.orgId,
       input.workflowDefinitionKey,

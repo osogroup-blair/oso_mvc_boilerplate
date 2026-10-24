@@ -1,7 +1,10 @@
 import { workflowHumanTaskService } from "../../services/workflow-human-task.service.js";
 import { workflowExecutionService } from "../../services/workflow-execution.service.js";
 import { runIntegrationOperation } from "./integration-activity.js";
+import { classifyProviderError } from "../../integrations/index.js";
 import type {
+  DeliverIntegrationWebhookInput,
+  DeliverIntegrationWebhookResult,
   CloseHumanTaskInput,
   CreateHumanTaskInput,
   EnsureWorkflowExecutionProjectionInput,
@@ -60,6 +63,27 @@ export async function runSyntheticIntegration(
   return { ...result.value, replayed: result.replayed };
 }
 
+export async function deliverIntegrationWebhook(
+  input: DeliverIntegrationWebhookInput
+): Promise<DeliverIntegrationWebhookResult> {
+  const result = await runIntegrationOperation(
+    {
+      orgId: input.orgId,
+      workflowDefinitionKey: input.workflowDefinitionKey,
+      requirementKey: input.requirementKey,
+      providerKey: "webhook.outbound",
+      operation: "deliver",
+      scope: "integration.webhook.deliver",
+      idempotencyKey: input.idempotencyKey,
+      request: input,
+    },
+    ({ adapter }, operationKey) => adapter.deliver({ event: input.event, payload: input.payload, operationKey }),
+    { classifyError: classifyProviderError }
+  );
+
+  return { ...result.value, replayed: result.replayed };
+}
+
 export async function runShowcaseSyntheticStep(
   input: RunShowcaseSyntheticStepInput
 ): Promise<RunShowcaseSyntheticStepResult> {
@@ -104,4 +128,5 @@ export const activities = {
   closeHumanTask,
   runSyntheticIntegration,
   runShowcaseSyntheticStep,
+  deliverIntegrationWebhook,
 };

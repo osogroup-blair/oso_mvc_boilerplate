@@ -298,6 +298,14 @@ export interface DataSynchronizationTargetState {
   lastSyncedAt?: string;
   validationMessage?: string;
   reconciled?: boolean;
+  /** Optional signed webhook notification (billing target only); skipped when not bound. */
+  webhook?: {
+    status: "delivered" | "skipped";
+    reason?: string;
+    deliveryId?: string | null;
+    duplicate?: boolean;
+    replayed?: boolean;
+  };
 }
 
 export interface DataSynchronizationState {

@@ -157,6 +157,7 @@ describe("workflow registry", () => {
     });
     expect(sync?.integrationRequirements).toEqual([
       expect.objectContaining({ key: "syntheticEcho", providerKey: "synthetic.echo", isRequired: true }),
+      expect.objectContaining({ key: "billingWebhook", providerKey: "webhook.outbound", capabilityKey: "deliver", isRequired: false }),
     ]);
   });
 

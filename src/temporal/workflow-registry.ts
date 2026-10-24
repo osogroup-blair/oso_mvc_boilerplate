@@ -944,6 +944,14 @@ const registeredWorkflows = [
         description: "Development-only adapter used for source fetch, target sync, validation, and reconciliation side effects.",
         isRequired: true,
       },
+      {
+        key: "billingWebhook",
+        providerKey: "webhook.outbound",
+        capabilityKey: "deliver",
+        label: "Billing Webhook",
+        description: "Optional signed webhook notified after the billing target syncs. Skipped while unbound or disabled.",
+        isRequired: false,
+      },
     ],
     summarizeState: (state) => ({
       sourceRecordId: (state as { sourceRecordId?: unknown }).sourceRecordId ?? "",

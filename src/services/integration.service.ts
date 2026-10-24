@@ -32,6 +32,7 @@ import {
   getIntegrationProvider,
   listIntegrationProviders,
   type IntegrationProviderRegistration,
+  type ProviderRuntime,
 } from "../integrations/index.js";
 import {
   evaluateBindingAvailability,
@@ -43,6 +44,7 @@ import {
   scrubIntegrationMessage,
 } from "../integrations/safety.js";
 import { settingService } from "./setting.service.js";
+import { providerRuntimeFromConfig } from "./integration-runtime.js";
 import type { ListParams } from "../lib/query.js";
 
 const DEFAULT_TEST_TIMEOUT_SECONDS = 10;
@@ -94,7 +96,8 @@ export class IntegrationService extends BaseService {
     private readonly permissions: PermissionsService = permissionsService,
     private readonly audit: AuditService = auditService,
     private readonly encryption: CredentialEncryptionService = credentialEncryptionService,
-    private readonly settings: Pick<typeof settingService, "get"> = settingService
+    private readonly settings: Pick<typeof settingService, "get"> = settingService,
+    private readonly runtime: ProviderRuntime = providerRuntimeFromConfig()
   ) {
     super("IntegrationService");
   }
@@ -374,7 +377,7 @@ export class IntegrationService extends BaseService {
       credentials = provider.validateCredentials(this.encryption.decrypt(connection));
       const config = provider.validateConfig(connection.config);
       const result = await runWithTimeout(
-        (signal) => provider.testConnection({ credentials, config, signal }),
+        (signal) => provider.testConnection({ credentials, config, signal, runtime: { ...this.runtime, log: this.log } }),
         timeoutMs
       );
       return {
