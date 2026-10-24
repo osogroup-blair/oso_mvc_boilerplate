@@ -23,6 +23,11 @@ import {
   workflowExecutionService,
 } from "./workflow-execution.service.js";
 import { auditService, AuditService } from "./audit.service.js";
+import {
+  integrationService,
+  type IntegrationService,
+  type RequirementStatus,
+} from "./integration.service.js";
 import { config } from "../config/index.js";
 
 export interface WorkflowOperationsActor {
@@ -38,7 +43,8 @@ export class WorkflowOperationsService extends BaseService {
     private readonly executions: WorkflowExecutionModel = workflowExecutionModel,
     private readonly schedules: WorkflowScheduleModel = workflowScheduleModel,
     private readonly executionService: WorkflowExecutionService = workflowExecutionService,
-    private readonly audit: AuditService = auditService
+    private readonly audit: AuditService = auditService,
+    private readonly integrations: Pick<IntegrationService, "getRequirementStatuses"> = integrationService
   ) {
     super("WorkflowOperationsService");
   }
@@ -47,12 +53,13 @@ export class WorkflowOperationsService extends BaseService {
     const context = await this.requireActiveOrg(actor.userId, orgId);
     await this.assertCanAdmin(actor.roleId);
     const olderThan = new Date(Date.now() - staleMinutes * 60_000);
-    const [temporal, taskQueue, staleExecutions, staleTotal, scheduleCounts] = await Promise.all([
+    const [temporal, taskQueue, staleExecutions, staleTotal, scheduleCounts, scheduleIntegrationIssues] = await Promise.all([
       this.temporal.getDiagnostics(),
       this.temporal.getTaskQueueDiagnostics(config.TEMPORAL_TASK_QUEUE),
       this.executions.listStaleRunningForOrg(context.activeOrg.id, olderThan, 25),
       this.executions.countStaleRunningForOrg(context.activeOrg.id, olderThan),
       this.schedules.countByStatusForOrg(context.activeOrg.id),
+      this.scheduleIntegrationIssues(context.activeOrg.id),
     ]);
 
     return {
@@ -69,6 +76,7 @@ export class WorkflowOperationsService extends BaseService {
       staleExecutions,
       staleTotal,
       scheduleCounts: this.normalizeScheduleCounts(scheduleCounts),
+      scheduleIntegrationIssues,
       temporalUiBaseUrl: config.TEMPORAL_UI_BASE_URL,
       operationalNotes: [
         "Temporal remains the authority for timers, retries, and workflow histories.",
@@ -144,6 +152,38 @@ export class WorkflowOperationsService extends BaseService {
     });
 
     return { ...context, results };
+  }
+
+  /**
+   * Schedules are gated on integration bindings only when created. Temporal keeps
+   * firing them afterwards, so report active schedules whose required bindings
+   * are no longer AVAILABLE; their runs would fail with INTEGRATION_* failures.
+   */
+  private async scheduleIntegrationIssues(orgId: string) {
+    const schedules = await this.schedules.listActiveWithRequirementsForOrg(orgId);
+    const statusesByDefinition = new Map<string, Promise<RequirementStatus[]>>();
+    const issues = [];
+    for (const schedule of schedules) {
+      const definition = schedule.workflowDefinition;
+      if (!definition.integrationRequirements.length) continue;
+      if (!statusesByDefinition.has(definition.id)) {
+        statusesByDefinition.set(definition.id, this.integrations.getRequirementStatuses(orgId, definition));
+      }
+      const statuses = (await statusesByDefinition.get(definition.id)) ?? [];
+      const unavailable = statuses.filter((item) => item.requirement.isRequired && !item.available);
+      if (!unavailable.length) continue;
+      issues.push({
+        schedule: { id: schedule.id, name: schedule.name, scheduleId: schedule.scheduleId },
+        workflowDefinition: { id: definition.id, name: definition.name },
+        unavailable: unavailable.map((item) => ({
+          key: item.requirement.key,
+          label: item.requirement.label,
+          status: item.status,
+          reason: item.reason,
+        })),
+      });
+    }
+    return issues;
   }
 
   private async requireActiveOrg(userId: string, orgId?: string) {

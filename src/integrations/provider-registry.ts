@@ -19,9 +19,11 @@ export interface IntegrationProviderRegistration<TAdapter = unknown> {
   configForm: FormDefinition;
   validateCredentials(input: unknown): Record<string, unknown>;
   validateConfig(input: unknown): Record<string, unknown>;
+  /** Must honour `signal`; the platform aborts it when the admin test timeout elapses. */
   testConnection(input: {
     credentials: Record<string, unknown>;
     config: Record<string, unknown>;
+    signal?: AbortSignal;
   }): Promise<IntegrationTestResult>;
   createAdapter(input: {
     credentials: Record<string, unknown>;
@@ -29,6 +31,8 @@ export interface IntegrationProviderRegistration<TAdapter = unknown> {
     connectionId: string;
   }): TAdapter;
   redactConfig(config: Record<string, unknown>): Record<string, unknown>;
+  /** Optional provider-specific scrubbing of test messages, applied after credential-value scrubbing. */
+  redactMessage?(message: string): string;
 }
 
 const syntheticCredentialSchema = z.object({

@@ -14,6 +14,7 @@ const safeBindingInclude = {
       lastTestStatus: true,
       lastTestMessage: true,
       disabledAt: true,
+      deletedAt: true,
     },
   },
 } satisfies Prisma.WorkflowIntegrationBindingInclude;

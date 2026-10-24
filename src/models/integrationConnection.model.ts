@@ -108,16 +108,22 @@ export class IntegrationConnectionModel extends BaseModel {
     return this.db.integrationConnection.update({ where: { id }, data });
   }
 
-  updateTestResult(
+  /**
+   * Compare-and-swap on the credential fingerprint: a test that read credentials
+   * which have since been rotated must not overwrite the newer state. Returns the
+   * number of rows written (0 = stale result discarded).
+   */
+  async updateTestResult(
     id: string,
+    expectedFingerprint: string | null,
     data: {
       status?: IntegrationConnectionStatus;
       lastTestStatus: IntegrationTestStatus;
       lastTestMessage: string;
     }
   ) {
-    return this.db.integrationConnection.update({
-      where: { id },
+    const result = await this.db.integrationConnection.updateMany({
+      where: { id, credentialFingerprint: expectedFingerprint, ...this.notDeleted },
       data: {
         status: data.status,
         lastTestedAt: new Date(),
@@ -125,6 +131,7 @@ export class IntegrationConnectionModel extends BaseModel {
         lastTestMessage: data.lastTestMessage,
       },
     });
+    return result.count;
   }
 
   softDelete(id: string) {

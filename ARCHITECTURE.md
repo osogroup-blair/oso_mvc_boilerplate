@@ -103,6 +103,8 @@ src/
 
   integrations/
     provider-registry.ts   Code-owned provider registry. Providers declare config/credential schemas, tests, redaction, and Activity adapters.
+    availability.ts        Single binding/connection availability evaluator shared by start gating, Activity resolvers, and operations; IntegrationUnavailableError.
+    safety.ts              Provider-call guards: timeout with AbortSignal and credential-value scrubbing for stored/audited messages.
 
   middleware/
     requestId.ts           Correlation id per request.
@@ -153,6 +155,7 @@ src/
     worker.ts              Separate Temporal Worker process entrypoint. Does not import Express/server.
     workflows/             Deterministic Workflow modules. No services, Prisma, Node I/O, or config imports.
     activities/            Activity modules. May call application services and integration adapters.
+      integration-activity.ts runIntegrationOperation: resolve-before-reserve, non-retryable INTEGRATION_* failures, idempotent provider calls.
 
   models/                Prisma wrappers. Extend BaseModel. Soft-delete aware.
     BaseModel.ts           Shared soft-delete filter helpers.
@@ -458,11 +461,16 @@ the provider registry.
 
 Requirement bindings are organization-scoped
 `WorkflowIntegrationBinding` rows. The public workflow start page renders each
-required binding as `AVAILABLE`, `MISSING`, `DISABLED`,
-`PROVIDER_MISMATCH`, or `CONNECTION_UNAVAILABLE`; required unavailable
-bindings block launch before Temporal is called.
+required binding as `AVAILABLE`, `MISSING`, `DISABLED`, `REQUIREMENT_MISSING`,
+`CONNECTION_NOT_FOUND`, `CONNECTION_UNAVAILABLE`, `PROVIDER_MISMATCH`,
+`PROVIDER_UNREGISTERED`, or `CAPABILITY_MISSING`, with a reason; required
+unavailable bindings block launch before Temporal is called.
 
-Activities resolve integrations through `integration-resolver.service.ts`. The
+Integration Activities call providers through `runIntegrationOperation`
+(`src/temporal/activities/integration-activity.ts`), which resolves through
+`integration-resolver.service.ts` before reserving idempotency and raises
+non-retryable `INTEGRATION_*` failures for configuration problems. Start gating
+and resolution share `src/integrations/availability.ts`. The
 resolver loads the bound connection, decrypts credentials in the Worker process,
 validates provider schemas, and returns a provider adapter. Workflow code never
 imports the resolver and never stores credentials in Workflow history. Activity

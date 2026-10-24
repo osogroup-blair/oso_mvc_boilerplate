@@ -9,6 +9,11 @@ import {
   credentialEncryptionService,
 } from "./credential-encryption.service.js";
 import { IntegrationConnectionResolverService } from "./integration-connection-resolver.service.js";
+import {
+  assertAvailable,
+  evaluateBindingAvailability,
+  IntegrationUnavailableError,
+} from "../integrations/availability.js";
 
 export interface ResolveIntegrationInput {
   orgId: string;
@@ -31,10 +36,13 @@ export class IntegrationResolverService extends BaseService {
       input.workflowDefinitionKey,
       input.requirementKey
     );
-    if (!binding) throw AppError.notFound("Workflow integration binding");
-    if (!binding.isEnabled) throw AppError.forbidden("Workflow integration binding is disabled");
-    const requirement = binding.workflowDefinition.integrationRequirements[0];
-    if (!requirement) throw AppError.notFound("Workflow integration requirement");
+    const requirement = binding?.workflowDefinition.integrationRequirements[0];
+    if (binding && !requirement) {
+      throw new IntegrationUnavailableError("REQUIREMENT_MISSING", "Workflow integration requirement not found");
+    }
+    // Same evaluator as workflow start gating, so the two can never disagree.
+    assertAvailable(evaluateBindingAvailability(input.orgId, binding, requirement ?? {}));
+    if (!binding || !requirement) throw AppError.notFound("Workflow integration binding"); // unreachable once AVAILABLE
     const resolved = this.connections.fromConnection(binding.connection, { orgId: input.orgId, providerKey: requirement.providerKey ?? undefined, capabilityKey: requirement.capabilityKey ?? undefined });
 
     return {

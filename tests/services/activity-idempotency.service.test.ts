@@ -96,4 +96,22 @@ describe("ActivityIdempotencyService", () => {
 
     expect(model.complete).not.toHaveBeenCalled();
   });
+
+  it("finds a stored success for the same request without reserving", async () => {
+    const requestHash = createHash("sha256").update(JSON.stringify({ a: 1 })).digest("hex");
+    model.find.mockResolvedValue({ id: "idem-1", status: ActivityIdempotencyStatus.SUCCEEDED, requestHash, response: { ok: true } });
+
+    await expect(service.findSucceeded("org-1", "scope", "key-1", { a: 1 })).resolves.toEqual({ value: { ok: true } });
+    await expect(service.findSucceeded("org-1", "scope", "key-1", { a: 2 })).resolves.toBeNull();
+    expect(model.createRunning).not.toHaveBeenCalled();
+    expect(model.claim).not.toHaveBeenCalled();
+  });
+
+  it("does not treat running or failed reservations as replayable", async () => {
+    const requestHash = createHash("sha256").update(JSON.stringify({ a: 1 })).digest("hex");
+    for (const status of [ActivityIdempotencyStatus.RUNNING, ActivityIdempotencyStatus.UNCERTAIN, ActivityIdempotencyStatus.FAILED]) {
+      model.find.mockResolvedValue({ id: "idem-1", status, requestHash, response: null });
+      await expect(service.findSucceeded("org-1", "scope", "key-1", { a: 1 })).resolves.toBeNull();
+    }
+  });
 });

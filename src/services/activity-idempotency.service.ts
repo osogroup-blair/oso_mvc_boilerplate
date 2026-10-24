@@ -55,6 +55,19 @@ export class ActivityIdempotencyService extends BaseService {
     return this.executeReserved(reserved.id, reserved.attempt, operationKey, operation, policy, true);
   }
 
+  /**
+   * Read-only replay lookup: returns a stored success for this exact request
+   * without reserving or claiming anything. Callers that fail before `run`
+   * (e.g. integration resolution) use it so an already-completed side effect is
+   * replayed instead of being reported as a configuration failure.
+   */
+  async findSucceeded<T>(orgId: string, scope: string, idempotencyKey: string, request: unknown): Promise<{ value: T } | null> {
+    const existing = await this.model.find(orgId, scope, idempotencyKey);
+    if (!existing || existing.status !== ActivityIdempotencyStatus.SUCCEEDED) return null;
+    if (existing.requestHash !== this.hashJson(request)) return null;
+    return { value: existing.response as T };
+  }
+
   private async executeReserved<T>(
     id: string, attempt: number, operationKey: string, operation: (key: string) => Promise<T>,
     policy: ActivityOperationPolicy<T>, recovering = false

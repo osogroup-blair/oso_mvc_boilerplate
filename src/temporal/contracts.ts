@@ -72,6 +72,30 @@ export interface HumanTaskActivities {
   closeHumanTask(input: CloseHumanTaskInput): Promise<void>;
 }
 
+/**
+ * ApplicationFailure types raised by integration Activities when a binding or
+ * connection cannot serve the requirement. They are non-retryable: retrying
+ * cannot fix configuration, an admin must. Compare by string in Workflow code.
+ */
+export const INTEGRATION_FAILURE_TYPES = {
+  MISSING: "INTEGRATION_MISSING",
+  DISABLED: "INTEGRATION_DISABLED",
+  REQUIREMENT_MISSING: "INTEGRATION_REQUIREMENT_MISSING",
+  CONNECTION_NOT_FOUND: "INTEGRATION_CONNECTION_NOT_FOUND",
+  CONNECTION_UNAVAILABLE: "INTEGRATION_CONNECTION_UNAVAILABLE",
+  PROVIDER_MISMATCH: "INTEGRATION_PROVIDER_MISMATCH",
+  PROVIDER_UNREGISTERED: "INTEGRATION_PROVIDER_UNREGISTERED",
+  CAPABILITY_MISSING: "INTEGRATION_CAPABILITY_MISSING",
+  CONFIG_INVALID: "INTEGRATION_CONFIG_INVALID",
+  RESOLUTION_FAILED: "INTEGRATION_RESOLUTION_FAILED",
+} as const;
+
+export type IntegrationFailureType = (typeof INTEGRATION_FAILURE_TYPES)[keyof typeof INTEGRATION_FAILURE_TYPES];
+
+export function isIntegrationConfigurationFailure(type: string | undefined | null): type is IntegrationFailureType {
+  return !!type && (Object.values(INTEGRATION_FAILURE_TYPES) as string[]).includes(type);
+}
+
 export interface RunSyntheticIntegrationInput {
   orgId: string;
   workflowDefinitionKey: string;
