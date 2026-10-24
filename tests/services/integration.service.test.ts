@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { IntegrationConnectionStatus, IntegrationTestStatus } from "@prisma/client";
 import { IntegrationService } from "../../src/services/integration.service.js";
 import { CredentialEncryptionService } from "../../src/services/credential-encryption.service.js";
-import { syntheticEchoProvider } from "../../src/integrations/provider-registry.js";
+import { syntheticEchoProvider } from "../../src/integrations/index.js";
 
 const makeConnections = () => ({
   listForOrg: vi.fn(),

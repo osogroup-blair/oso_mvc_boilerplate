@@ -84,6 +84,19 @@ describe("workflow registry", () => {
     ).toThrow("Duplicate integration requirement");
   });
 
+  it("rejects requirements for unregistered providers or undeclared capabilities", () => {
+    expect(() =>
+      validateWorkflowRegistry([
+        registration({ integrationRequirements: [{ key: "crm", providerKey: "hubspot" as never, label: "CRM" }] }),
+      ])
+    ).toThrow('Unknown integration provider "hubspot"');
+    expect(() =>
+      validateWorkflowRegistry([
+        registration({ integrationRequirements: [{ key: "echo", providerKey: "synthetic.echo", capabilityKey: "payment", label: "Echo" }] }),
+      ])
+    ).toThrow('does not declare capability "payment"');
+  });
+
   it("rejects duplicate action signal names inside one registration", () => {
     expect(() =>
       validateWorkflowRegistry([

@@ -76,7 +76,7 @@ async function resolverOutcome(scenario: Scenario, decrypt: ReturnType<typeof vi
   const resolver = new IntegrationResolverService(bindings as never, encryption);
   decrypt.mockClear();
   try {
-    await resolver.resolve({ orgId: "org-1", workflowDefinitionKey: "platform.test", requirementKey: scenario.requirement.key });
+    await resolver.resolve({ orgId: "org-1", workflowDefinitionKey: "platform.test", requirementKey: scenario.requirement.key, providerKey: "synthetic.echo" });
     return { ok: true as const, decrypted: decrypt.mock.calls.length > 0 };
   } catch (error) {
     return { ok: false as const, error, decrypted: decrypt.mock.calls.length > 0 };
@@ -122,7 +122,7 @@ describe("integration availability parity", () => {
       }),
     } as never, encryption);
     await expect(
-      resolver.resolve({ orgId: "org-1", workflowDefinitionKey: "platform.test", requirementKey: "syntheticEcho" })
+      resolver.resolve({ orgId: "org-1", workflowDefinitionKey: "platform.test", requirementKey: "syntheticEcho", providerKey: "synthetic.echo" })
     ).rejects.toMatchObject({ availabilityStatus: "REQUIREMENT_MISSING", statusCode: 404 });
   });
 });

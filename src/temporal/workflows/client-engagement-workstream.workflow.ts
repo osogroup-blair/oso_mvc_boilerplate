@@ -1,6 +1,7 @@
 import { workflowInfo } from "@temporalio/workflow";
 import { showcaseActivities, type ClientEngagementChildInput, type ClientEngagementWorkstreamResult } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function clientEngagementWorkstreamWorkflow(
   input: ClientEngagementChildInput
@@ -10,7 +11,7 @@ export async function clientEngagementWorkstreamWorkflow(
   const result = await showcaseActivities.runShowcaseSyntheticStep({
     orgId: input.orgId,
     workflowDefinitionKey: input.workflowDefinitionKey,
-    requirementKey: "syntheticEcho",
+    requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.clientEngagement">,
     stepKey: `clientEngagement.workstream.${input.workstream}`,
     idempotencyKey: `${info.workflowId}:deliver`,
     payload: {

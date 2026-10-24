@@ -3,6 +3,7 @@ import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contr
 import { clientEngagementStateQuery, clientEngagementApprovalActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type EngagementPhase, type ClientEngagementStatus, type ClientEngagementWorkflowInput, type ClientEngagementState, engagementPhases, allImplementationWorkstreams, engagementPhaseMilestones, createEngagementPhaseState, createEngagementWorkstreamState } from './shared.js';
 import { clientEngagementWorkstreamWorkflow } from './client-engagement-workstream.workflow.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function clientEngagementWorkflow(
   input: ClientEngagementWorkflowInput,
@@ -50,7 +51,7 @@ export async function clientEngagementWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.clientEngagement">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.phase ?? payload.engagementId ?? "all")}`,
       payload,

@@ -2,6 +2,7 @@ import { setHandler, workflowInfo } from "@temporalio/workflow";
 import type { PlatformWorkflowContext } from "../contracts.js";
 import { dataSynchronizationStateQuery, showcaseActivities, ensureWorkflowExecutionProjection, type DataSyncTarget, type DataSynchronizationWorkflowInput, type DataSynchronizationState, createDataSyncTargetState } from './shared.js';
 import { runVersionedWorkflow } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function dataSynchronizationWorkflow(
   input: DataSynchronizationWorkflowInput,
@@ -33,7 +34,7 @@ export async function dataSynchronizationWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.dataSynchronization">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.target ?? payload.sourceRecordId ?? "all")}`,
       payload,

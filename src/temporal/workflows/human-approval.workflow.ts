@@ -2,6 +2,7 @@ import { condition, isCancellation, setHandler, workflowInfo } from "@temporalio
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { humanApprovalStateQuery, humanApprovalReviewActionSignal, humanApprovalResubmitActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type HumanApprovalWorkflowInput, type HumanApprovalState } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function humanApprovalWorkflow(
   input: HumanApprovalWorkflowInput,
@@ -41,7 +42,7 @@ export async function humanApprovalWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.humanApproval">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${state.decisionHistory.length}`,
       payload,

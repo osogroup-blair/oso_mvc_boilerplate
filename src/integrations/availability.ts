@@ -1,6 +1,6 @@
 import { IntegrationConnectionStatus } from "@prisma/client";
 import { AppError } from "../lib/AppError.js";
-import { getIntegrationProvider, type IntegrationProviderRegistration } from "./provider-registry.js";
+import { getIntegrationProvider, type IntegrationProviderRegistration } from "./index.js";
 
 /**
  * Single source of truth for "can this connection serve this requirement?".

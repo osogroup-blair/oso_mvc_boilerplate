@@ -14,11 +14,14 @@ import {
   evaluateBindingAvailability,
   IntegrationUnavailableError,
 } from "../integrations/availability.js";
+import type { AdapterFor, IntegrationProviderKey } from "../integrations/index.js";
 
-export interface ResolveIntegrationInput {
+export interface ResolveIntegrationInput<K extends IntegrationProviderKey = IntegrationProviderKey> {
   orgId: string;
   workflowDefinitionKey: string;
   requirementKey: string;
+  /** The provider the calling Activity is written against; types the returned adapter. */
+  providerKey: K;
 }
 
 export class IntegrationResolverService extends BaseService {
@@ -30,7 +33,7 @@ export class IntegrationResolverService extends BaseService {
     super("IntegrationResolverService");
   }
 
-  async resolve(input: ResolveIntegrationInput) {
+  async resolve<K extends IntegrationProviderKey>(input: ResolveIntegrationInput<K>) {
     const binding = await this.bindings.findForRequirement(
       input.orgId,
       input.workflowDefinitionKey,
@@ -43,10 +46,20 @@ export class IntegrationResolverService extends BaseService {
     // Same evaluator as workflow start gating, so the two can never disagree.
     assertAvailable(evaluateBindingAvailability(input.orgId, binding, requirement ?? {}));
     if (!binding || !requirement) throw AppError.notFound("Workflow integration binding"); // unreachable once AVAILABLE
+    // Configuration is fine but the Activity was written for a different provider
+    // than the registry declares: a code defect, reported as a mismatch.
+    if (requirement.providerKey !== input.providerKey) {
+      throw new IntegrationUnavailableError(
+        "PROVIDER_MISMATCH",
+        `Activity expects provider ${input.providerKey} but requirement ${requirement.key} declares ${requirement.providerKey}`
+      );
+    }
     const resolved = this.connections.fromConnection(binding.connection, { orgId: input.orgId, providerKey: requirement.providerKey ?? undefined, capabilityKey: requirement.capabilityKey ?? undefined });
 
     return {
       ...resolved,
+      // Safe: the connection's provider was checked against input.providerKey above.
+      adapter: resolved.adapter as AdapterFor<K>,
       requirement: {
         key: requirement.key,
         capabilityKey: requirement.capabilityKey,

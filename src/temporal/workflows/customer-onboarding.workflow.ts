@@ -2,6 +2,7 @@ import { condition, isCancellation, setHandler, workflowInfo } from "@temporalio
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { customerOnboardingStateQuery, customerOnboardingActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type CustomerOnboardingWorkflowInput, type CustomerOnboardingStatus, type CustomerOnboardingState } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function customerOnboardingWorkflow(
   input: CustomerOnboardingWorkflowInput,
@@ -40,7 +41,7 @@ export async function customerOnboardingWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.customerOnboarding">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}`,
       payload,
@@ -88,7 +89,7 @@ export async function customerOnboardingWorkflow(
         await showcaseActivities.runShowcaseSyntheticStep({
           orgId: context.orgId,
           workflowDefinitionKey: context.workflowDefinitionKey,
-          requirementKey: "syntheticEcho",
+          requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.customerOnboarding">,
           stepKey: "provisionUser",
           idempotencyKey: `${info.workflowId}:provisionUser:${email}`,
           payload: {
@@ -106,7 +107,7 @@ export async function customerOnboardingWorkflow(
           await showcaseActivities.runShowcaseSyntheticStep({
             orgId: context.orgId,
             workflowDefinitionKey: context.workflowDefinitionKey,
-            requirementKey: "syntheticEcho",
+            requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.customerOnboarding">,
             stepKey: "configureIntegration",
             idempotencyKey: `${info.workflowId}:configureIntegration:${integrationName}`,
             payload: {

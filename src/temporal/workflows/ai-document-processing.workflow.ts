@@ -2,6 +2,7 @@ import { condition, setHandler, workflowInfo } from "@temporalio/workflow";
 import type { PlatformWorkflowContext, WorkflowHumanActionInput } from "../contracts.js";
 import { aiDocumentProcessingStateQuery, aiDocumentReviewActionSignal, humanTasks, showcaseActivities, ensureWorkflowExecutionProjection, type AiDocumentProcessingWorkflowInput, type AiDocumentProcessingState, defaultAiDocumentSummary, correctedAiDocumentSummary } from './shared.js';
 import { runVersionedWorkflow, setHumanActionHandler } from './workflow-runtime.js';
+import type { RequirementKeyFor } from "../workflow-registry.js";
 
 export async function aiDocumentProcessingWorkflow(
   input: AiDocumentProcessingWorkflowInput,
@@ -29,7 +30,7 @@ export async function aiDocumentProcessingWorkflow(
     showcaseActivities.runShowcaseSyntheticStep({
       orgId: context.orgId,
       workflowDefinitionKey: context.workflowDefinitionKey,
-      requirementKey: "syntheticEcho",
+      requirementKey: "syntheticEcho" satisfies RequirementKeyFor<"showcase.aiDocumentProcessing">,
       stepKey,
       idempotencyKey: `${info.workflowId}:${stepKey}:${String(payload.documentId ?? "document")}`,
       payload,

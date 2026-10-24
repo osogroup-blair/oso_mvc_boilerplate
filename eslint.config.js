@@ -28,6 +28,18 @@ export default tseslint.config(
     },
   },
   {
+    // INT-07: adapters are typed by runIntegrationOperation/IntegrationResolverService; casting one hides a provider mismatch.
+    files: ["src/temporal/activities/**/*.ts"],
+    rules: {
+      "no-restricted-syntax": ["error",
+        {
+          selector: "TSAsExpression[typeAnnotation.typeName.name=/Adapter(For)?$/], TSTypeAssertion[typeAnnotation.typeName.name=/Adapter(For)?$/]",
+          message: "Do not cast integration adapters in Activities; pass providerKey/operation to runIntegrationOperation and use the typed adapter it provides.",
+        },
+      ],
+    },
+  },
+  {
     ignores: ["dist/**", "node_modules/**"],
   }
 );
