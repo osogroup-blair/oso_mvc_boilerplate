@@ -1,7 +1,6 @@
 import { workflowHumanTaskService } from "../../services/workflow-human-task.service.js";
 import { workflowExecutionService } from "../../services/workflow-execution.service.js";
-import { integrationResolverService } from "../../services/integration-resolver.service.js";
-import { activityIdempotencyService } from "../../services/activity-idempotency.service.js";
+import { runIntegrationOperation } from "./integration-activity.js";
 import type { SyntheticEchoAdapter } from "../../integrations/provider-registry.js";
 import type {
   CloseHumanTaskInput,
@@ -35,17 +34,16 @@ export async function ensureWorkflowExecutionProjection(
 export async function runSyntheticIntegration(
   input: RunSyntheticIntegrationInput
 ): Promise<RunSyntheticIntegrationResult> {
-  const result = await activityIdempotencyService.run(
-    input.orgId,
-    "integration.synthetic.echo",
-    input.idempotencyKey,
-    input,
-    async () => {
-      const resolved = await integrationResolverService.resolve({
-        orgId: input.orgId,
-        workflowDefinitionKey: input.workflowDefinitionKey,
-        requirementKey: input.requirementKey,
-      });
+  const result = await runIntegrationOperation(
+    {
+      orgId: input.orgId,
+      workflowDefinitionKey: input.workflowDefinitionKey,
+      requirementKey: input.requirementKey,
+      scope: "integration.synthetic.echo",
+      idempotencyKey: input.idempotencyKey,
+      request: input,
+    },
+    async (resolved) => {
       const adapter = resolved.adapter as SyntheticEchoAdapter;
       const echoed = await adapter.echo(input.payload);
 
@@ -65,17 +63,16 @@ export async function runSyntheticIntegration(
 export async function runShowcaseSyntheticStep(
   input: RunShowcaseSyntheticStepInput
 ): Promise<RunShowcaseSyntheticStepResult> {
-  const result = await activityIdempotencyService.run(
-    input.orgId,
-    `showcase.synthetic.${input.workflowDefinitionKey}.${input.stepKey}`,
-    input.idempotencyKey,
-    input,
-    async () => {
-      const resolved = await integrationResolverService.resolve({
-        orgId: input.orgId,
-        workflowDefinitionKey: input.workflowDefinitionKey,
-        requirementKey: input.requirementKey,
-      });
+  const result = await runIntegrationOperation(
+    {
+      orgId: input.orgId,
+      workflowDefinitionKey: input.workflowDefinitionKey,
+      requirementKey: input.requirementKey,
+      scope: `showcase.synthetic.${input.workflowDefinitionKey}.${input.stepKey}`,
+      idempotencyKey: input.idempotencyKey,
+      request: input,
+    },
+    async (resolved) => {
       const adapter = resolved.adapter as SyntheticEchoAdapter;
       const echoed = await adapter.echo({
         stepKey: input.stepKey,

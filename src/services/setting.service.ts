@@ -43,6 +43,7 @@ export const SETTING_KEYS = {
 
   // Workflow Operations
   ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES: { key: "ACTIVITY_IDEMPOTENCY_STALE_CLAIM_MINUTES", group: "Workflow Operations", type: "number", label: "Activity Idempotency Stale Claim Minutes", help: "Minutes before a RUNNING activity idempotency claim can be recovered by a retry after a worker crash.", defaultValue: "15" },
+  INTEGRATION_TEST_TIMEOUT_SECONDS: { key: "INTEGRATION_TEST_TIMEOUT_SECONDS", group: "Workflow Operations", type: "number", label: "Integration Test Timeout Seconds", help: "Seconds an admin integration connection test may run before it is aborted and recorded as failed (1-60).", defaultValue: "10" },
 
   // UI/Appearance
   FOOTER_TEXT: { key: "FOOTER_TEXT", group: "UI & Appearance", type: "text", label: "Footer Copyright Text", help: "Footer disclaimer / copyright notice.", defaultValue: "© 2026 My App. All rights reserved." },

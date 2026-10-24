@@ -1,10 +1,10 @@
 import type { IntegrationConnection } from "@prisma/client";
-import { IntegrationConnectionStatus } from "@prisma/client";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { integrationConnectionModel, IntegrationConnectionModel } from "../models/integrationConnection.model.js";
 import { credentialEncryptionService, CredentialEncryptionService } from "./credential-encryption.service.js";
 import { getIntegrationProvider } from "../integrations/provider-registry.js";
+import { assertAvailable, evaluateConnectionAvailability } from "../integrations/availability.js";
 
 export interface ConnectionRequirement { orgId: string; providerKey?: string; capabilityKey?: string }
 
@@ -15,16 +15,14 @@ export class IntegrationConnectionResolverService extends BaseService {
 
   async resolve(connectionId: string, requirement: ConnectionRequirement) {
     const row = await this.model.findSecretByIdInOrg(connectionId, requirement.orgId);
-    if (!row) throw AppError.notFound("Integration connection");
     return this.fromConnection(row, requirement);
   }
 
-  fromConnection(row: IntegrationConnection, requirement: ConnectionRequirement) {
-    if (row.orgId !== requirement.orgId || row.deletedAt) throw AppError.notFound("Integration connection");
-    if (row.status !== IntegrationConnectionStatus.ACTIVE || row.disabledAt) throw AppError.conflict("Integration connection is unavailable");
-    if (requirement.providerKey && row.providerKey !== requirement.providerKey) throw AppError.badRequest("Integration provider mismatch");
-    const provider = getIntegrationProvider(row.providerKey);
-    if (!provider || requirement.capabilityKey && !provider.capabilities.includes(requirement.capabilityKey)) throw AppError.badRequest("Integration capability is unavailable");
+  fromConnection(row: IntegrationConnection | null, requirement: ConnectionRequirement) {
+    // Availability is evaluated before decryption so rejected rows never expose secrets.
+    assertAvailable(evaluateConnectionAvailability(requirement.orgId, row, requirement));
+    const provider = row && getIntegrationProvider(row.providerKey);
+    if (!row || !provider) throw AppError.notFound("Integration connection"); // unreachable once AVAILABLE
     const credentials = provider.validateCredentials(this.encryption.decrypt(row));
     const config = provider.validateConfig(row.config);
     const adapter = provider.createAdapter({ credentials, config, connectionId: row.id });

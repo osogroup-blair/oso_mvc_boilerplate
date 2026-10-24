@@ -130,15 +130,50 @@ idempotency keys.
 
 When a Workflow needs an external integration, add an integration requirement
 to the workflow registration. The Workflow should pass only non-secret
-requirement keys and business payloads to Activities. The Activity resolves the
-bound connection with `integration-resolver.service.ts`, calls the provider
-adapter, and returns only non-secret output to the Workflow. Never put provider
-credentials into Workflow input, signal payloads, queries, state summaries, or
-Temporal history.
+requirement keys and business payloads to Activities. The Activity calls the
+provider through `runIntegrationOperation` in
+`src/temporal/activities/integration-activity.ts` and returns only non-secret
+output to the Workflow. Never put provider credentials into Workflow input,
+signal payloads, queries, state summaries, or Temporal history.
+
+`runIntegrationOperation({ orgId, workflowDefinitionKey, requirementKey, scope,
+idempotencyKey, request }, (resolved, operationKey) => ..., policy)` is the only
+supported shape for integration Activities (copy `runSyntheticIntegration`):
+- it resolves the binding through `integration-resolver.service.ts` **before**
+  reserving an `ActivityIdempotency` row, so configuration errors never leave
+  RUNNING/UNCERTAIN reservations;
+- binding/connection/provider/capability problems become
+  `ApplicationFailure.nonRetryable` with a type from
+  `INTEGRATION_FAILURE_TYPES` in `src/temporal/contracts.ts` (compare by string
+  in Workflow code; `isIntegrationConfigurationFailure(type)` helps). A prior
+  SUCCEEDED result for the same request is replayed instead of failing;
+- database/network errors during resolution stay retryable; provider errors are
+  classified by the idempotency `policy` as before.
+
+Availability has one definition: `src/integrations/availability.ts`
+(`evaluateBindingAvailability` / `evaluateConnectionAvailability`). Start
+gating (`IntegrationService.getRequirementStatuses`), the Activity resolvers,
+and the operations dashboard all use it. Statuses: `AVAILABLE`, `MISSING`,
+`DISABLED`, `REQUIREMENT_MISSING`, `CONNECTION_NOT_FOUND`,
+`CONNECTION_UNAVAILABLE`, `PROVIDER_MISMATCH`, `PROVIDER_UNREGISTERED`,
+`CAPABILITY_MISSING`. Do not add a second availability check anywhere; extend
+the evaluator and `tests/services/integration-availability.test.ts` (the
+gate/resolver parity test) together.
 
 Required integration availability is shown on `/workflows/:slug` and enforced
-by `workflow-execution.service.ts` before Temporal start. Admins configure
-actual bindings per organization at `/admin/integrations`.
+by `workflow-execution.service.ts` and `workflow-schedule.service.ts` before
+Temporal start or schedule creation. Because Temporal keeps firing schedules
+afterwards, `/admin/workflow-operations` lists active schedules whose required
+bindings are no longer available. Admins configure actual bindings per
+organization at `/admin/integrations`.
+
+Admin connection tests (`IntegrationService.testConnection`) validate stored
+config/credentials, abort after the `INTEGRATION_TEST_TIMEOUT_SECONDS` site
+setting (providers must honour the `signal` passed to `testConnection`), scrub
+every credential value from the result message (`src/integrations/safety.ts`,
+plus the optional provider `redactMessage`), and never change the status of a
+DISABLED connection. Test results are written with a compare-and-swap on the
+credential fingerprint, so a result from before a rotation is discarded.
 
 ## Phase 5 operations and schedule shape
 
@@ -215,9 +250,10 @@ attempted/succeeded/failed counts.
   It must not import services, integration resolvers, models, Prisma, config,
   logger, or Node I/O.
 - `runShowcaseSyntheticStep` is the Phase 6A/6B/6C/6D/6E synthetic Activity seam. It
-  resolves the workflow's admin-bound `syntheticEcho` requirement with
-  `integration-resolver.service.ts`, calls the Synthetic Echo adapter, and wraps
-  the side effect with `activity-idempotency.service.ts`.
+  calls the workflow's admin-bound `syntheticEcho` requirement through
+  `runIntegrationOperation`, which resolves the binding, fails configuration
+  errors fast, and wraps the Synthetic Echo call with
+  `activity-idempotency.service.ts`.
 - Seed data binds the seeded Synthetic Echo connection to `platform.test`,
   `showcase.customerOnboarding`, `showcase.humanApproval`,
   `showcase.orderFulfillmentSaga`, `showcase.dataSynchronization`,

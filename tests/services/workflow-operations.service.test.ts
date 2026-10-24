@@ -25,6 +25,11 @@ const makeExecutions = () => ({
 
 const makeSchedules = () => ({
   countByStatusForOrg: vi.fn(),
+  listActiveWithRequirementsForOrg: vi.fn().mockResolvedValue([]),
+});
+
+const makeIntegrations = () => ({
+  getRequirementStatuses: vi.fn().mockResolvedValue([]),
 });
 
 const makeExecutionService = () => ({
@@ -49,6 +54,7 @@ describe("WorkflowOperationsService", () => {
   let schedules: ReturnType<typeof makeSchedules>;
   let executionService: ReturnType<typeof makeExecutionService>;
   let audit: ReturnType<typeof makeAudit>;
+  let integrations: ReturnType<typeof makeIntegrations>;
   let service: WorkflowOperationsService;
 
   beforeEach(() => {
@@ -59,6 +65,7 @@ describe("WorkflowOperationsService", () => {
     schedules = makeSchedules();
     executionService = makeExecutionService();
     audit = makeAudit();
+    integrations = makeIntegrations();
 
     service = new WorkflowOperationsService(
       organizations as never,
@@ -67,11 +74,39 @@ describe("WorkflowOperationsService", () => {
       executions as never,
       schedules as never,
       executionService as never,
-      audit as never
+      audit as never,
+      integrations as never
     );
 
     organizations.resolveForUser.mockResolvedValue(orgContext);
     permissions.can.mockResolvedValue(true);
+  });
+
+  it("flags active schedules whose required integration bindings are no longer available", async () => {
+    temporal.getDiagnostics.mockResolvedValue({ status: "ok" });
+    temporal.getTaskQueueDiagnostics.mockResolvedValue({ status: "ok", workflowPollerCount: 1, activityPollerCount: 1, pollers: [] });
+    executions.listStaleRunningForOrg.mockResolvedValue([]);
+    executions.countStaleRunningForOrg.mockResolvedValue(0);
+    schedules.countByStatusForOrg.mockResolvedValue([]);
+    const requirement = { key: "syntheticEcho", label: "Synthetic Echo", providerKey: "synthetic.echo", capabilityKey: "echo", description: null, isRequired: true };
+    const definition = { id: "def-1", name: "Data Sync", integrationRequirements: [requirement] };
+    schedules.listActiveWithRequirementsForOrg.mockResolvedValue([
+      { id: "sch-1", name: "Nightly", scheduleId: "temporal-sch-1", workflowDefinition: definition },
+      { id: "sch-2", name: "Hourly", scheduleId: "temporal-sch-2", workflowDefinition: definition },
+      { id: "sch-3", name: "No integrations", scheduleId: "temporal-sch-3", workflowDefinition: { id: "def-2", name: "Heartbeat", integrationRequirements: [] } },
+    ]);
+    integrations.getRequirementStatuses.mockResolvedValue([
+      { requirement, binding: null, status: "CONNECTION_UNAVAILABLE", reason: "Integration connection is unavailable", available: false },
+    ]);
+
+    const dashboard = await service.dashboard({ userId: "user-1", roleId: "role-1" }, "org-1");
+
+    expect(integrations.getRequirementStatuses).toHaveBeenCalledTimes(1);
+    expect(integrations.getRequirementStatuses).toHaveBeenCalledWith("org-1", definition);
+    expect(dashboard.scheduleIntegrationIssues).toEqual([
+      expect.objectContaining({ schedule: { id: "sch-1", name: "Nightly", scheduleId: "temporal-sch-1" }, unavailable: [expect.objectContaining({ key: "syntheticEcho", status: "CONNECTION_UNAVAILABLE" })] }),
+      expect.objectContaining({ schedule: { id: "sch-2", name: "Hourly", scheduleId: "temporal-sch-2" } }),
+    ]);
   });
 
   it("builds a dashboard from Temporal diagnostics, worker pollers, stale projections, and schedules", async () => {

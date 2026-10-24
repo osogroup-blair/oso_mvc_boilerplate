@@ -62,6 +62,27 @@ export class WorkflowScheduleModel extends BaseModel {
     });
   }
 
+  /** Active schedules with their workflow's live integration requirements, for binding-health checks. */
+  listActiveWithRequirementsForOrg(orgId: string, take = 100) {
+    return this.db.workflowSchedule.findMany({
+      where: { orgId, status: WorkflowScheduleStatus.ACTIVE, ...this.notDeleted },
+      select: {
+        id: true,
+        name: true,
+        scheduleId: true,
+        workflowDefinition: {
+          select: {
+            id: true,
+            name: true,
+            integrationRequirements: { where: this.notDeleted, orderBy: { key: "asc" } },
+          },
+        },
+      },
+      orderBy: { name: "asc" },
+      take,
+    });
+  }
+
   findByIdInOrg(id: string, orgId: string) {
     return this.db.workflowSchedule.findFirst({
       where: { id, orgId, ...this.notDeleted },

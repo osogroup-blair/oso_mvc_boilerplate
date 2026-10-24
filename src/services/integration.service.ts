@@ -1,3 +1,4 @@
+import { ZodError } from "zod";
 import {
   IntegrationConnectionStatus,
   IntegrationTestStatus,
@@ -32,7 +33,21 @@ import {
   listIntegrationProviders,
   type IntegrationProviderRegistration,
 } from "../integrations/provider-registry.js";
+import {
+  evaluateBindingAvailability,
+  type IntegrationAvailabilityStatus,
+} from "../integrations/availability.js";
+import {
+  IntegrationTimeoutError,
+  runWithTimeout,
+  scrubIntegrationMessage,
+} from "../integrations/safety.js";
+import { settingService } from "./setting.service.js";
 import type { ListParams } from "../lib/query.js";
+
+const DEFAULT_TEST_TIMEOUT_SECONDS = 10;
+const MIN_TEST_TIMEOUT_SECONDS = 1;
+const MAX_TEST_TIMEOUT_SECONDS = 60;
 
 export interface IntegrationActor {
   userId: string;
@@ -65,7 +80,8 @@ export interface RequirementStatus {
     isRequired: boolean;
   };
   binding: Awaited<ReturnType<WorkflowIntegrationBindingModel["listForWorkflow"]>>[number] | null;
-  status: "MISSING" | "DISABLED" | "PROVIDER_MISMATCH" | "CONNECTION_UNAVAILABLE" | "AVAILABLE";
+  status: IntegrationAvailabilityStatus;
+  reason: string;
   available: boolean;
 }
 
@@ -77,7 +93,8 @@ export class IntegrationService extends BaseService {
     private readonly orgContext: OrganizationContextService = organizationContextService,
     private readonly permissions: PermissionsService = permissionsService,
     private readonly audit: AuditService = auditService,
-    private readonly encryption: CredentialEncryptionService = credentialEncryptionService
+    private readonly encryption: CredentialEncryptionService = credentialEncryptionService,
+    private readonly settings: Pick<typeof settingService, "get"> = settingService
   ) {
     super("IntegrationService");
   }
@@ -162,7 +179,8 @@ export class IntegrationService extends BaseService {
 
     const updated = await this.connections.update(id, {
       ...encrypted,
-      status: IntegrationConnectionStatus.ACTIVE,
+      // Rotation must never re-enable a connection an admin disabled.
+      status: this.isDisabled(before) ? IntegrationConnectionStatus.DISABLED : IntegrationConnectionStatus.ACTIVE,
       lastTestStatus: IntegrationTestStatus.NOT_TESTED,
       lastTestMessage: "Credentials rotated; run a connection test.",
     });
@@ -206,17 +224,19 @@ export class IntegrationService extends BaseService {
     await this.assertCanAdmin(actor.roleId);
     const connection = await this.requireSecretConnection(id, context.activeOrg.id);
     const provider = this.requireProvider(connection.providerKey);
-    const credentials = this.encryption.decrypt(connection);
-    const result = await provider.testConnection({
-      credentials,
-      config: connection.config as Record<string, unknown>,
-    });
+    const disabled = this.isDisabled(connection);
+    const result = await this.runProviderTest(provider, connection, await this.testTimeoutMs());
+    const lastTestStatus = result.ok ? IntegrationTestStatus.SUCCEEDED : IntegrationTestStatus.FAILED;
 
-    const updated = await this.connections.updateTestResult(id, {
-      status: result.ok ? IntegrationConnectionStatus.ACTIVE : IntegrationConnectionStatus.CONFIG_ERROR,
-      lastTestStatus: result.ok ? IntegrationTestStatus.SUCCEEDED : IntegrationTestStatus.FAILED,
+    const written = await this.connections.updateTestResult(id, connection.credentialFingerprint, {
+      // A disabled connection may be tested, but only an explicit enable action may change its status.
+      status: disabled
+        ? undefined
+        : result.ok ? IntegrationConnectionStatus.ACTIVE : IntegrationConnectionStatus.CONFIG_ERROR,
+      lastTestStatus,
       lastTestMessage: result.message,
     });
+    const stale = written === 0;
 
     await this.audit.record({
       actorId: actor.userId,
@@ -226,13 +246,18 @@ export class IntegrationService extends BaseService {
       changes: {
         after: {
           providerKey: connection.providerKey,
-          lastTestStatus: updated.lastTestStatus,
-          lastTestMessage: updated.lastTestMessage,
+          lastTestStatus,
+          lastTestMessage: result.message,
+          ...(disabled ? { statusPreserved: IntegrationConnectionStatus.DISABLED } : {}),
+          ...(stale ? { stale: true } : {}),
         },
       },
     });
 
-    return { ok: result.ok, message: result.message };
+    if (stale) {
+      return { ok: result.ok, stale, message: "Credentials changed while the test was running; result discarded. Run the test again." };
+    }
+    return { ok: result.ok, stale, message: result.message };
   }
 
   async getWorkflowBindingPage(actor: IntegrationActor, workflowDefinitionId: string, orgId?: string) {
@@ -314,11 +339,12 @@ export class IntegrationService extends BaseService {
 
     return requirements.map((requirement) => {
       const binding = byRequirement.get(requirement.key) ?? null;
-      const status = this.requirementStatus(requirement, binding);
+      const { status, reason } = evaluateBindingAvailability(orgId, binding, requirement);
       return {
         requirement,
         binding,
         status,
+        reason,
         available: status === "AVAILABLE",
       };
     });
@@ -333,15 +359,52 @@ export class IntegrationService extends BaseService {
     }
   }
 
-  private requirementStatus(
-    requirement: { providerKey: string },
-    binding: Awaited<ReturnType<WorkflowIntegrationBindingModel["listForWorkflow"]>>[number] | null
-  ): RequirementStatus["status"] {
-    if (!binding) return "MISSING";
-    if (!binding.isEnabled) return "DISABLED";
-    if (binding.connection.providerKey !== requirement.providerKey) return "PROVIDER_MISMATCH";
-    if (binding.connection.status !== IntegrationConnectionStatus.ACTIVE) return "CONNECTION_UNAVAILABLE";
-    return "AVAILABLE";
+  /**
+   * Runs provider test code defensively: validated inputs, a hard timeout, and a
+   * message scrubbed of credential values. Provider failures become a FAILED
+   * result instead of a 500, so the outcome is always recorded.
+   */
+  private async runProviderTest(
+    provider: IntegrationProviderRegistration,
+    connection: Awaited<ReturnType<IntegrationService["requireSecretConnection"]>>,
+    timeoutMs: number
+  ): Promise<{ ok: boolean; message: string }> {
+    let credentials: Record<string, unknown> = {};
+    try {
+      credentials = provider.validateCredentials(this.encryption.decrypt(connection));
+      const config = provider.validateConfig(connection.config);
+      const result = await runWithTimeout(
+        (signal) => provider.testConnection({ credentials, config, signal }),
+        timeoutMs
+      );
+      return {
+        ok: result.ok === true,
+        message: scrubIntegrationMessage(result.message, credentials, provider.redactMessage?.bind(provider)),
+      };
+    } catch (err) {
+      if (err instanceof IntegrationTimeoutError) {
+        return { ok: false, message: `INTEGRATION_TEST_TIMEOUT: ${err.message}` };
+      }
+      if (err instanceof ZodError) {
+        return { ok: false, message: "INTEGRATION_CONFIG_INVALID: stored configuration or credentials failed provider validation" };
+      }
+      if (err instanceof AppError) {
+        return { ok: false, message: `INTEGRATION_${err.code}: ${scrubIntegrationMessage(err.message, credentials)}` };
+      }
+      // Provider error text is untrusted and may echo secrets; log only its type.
+      this.log.warn({ providerKey: provider.key, errorName: (err as Error)?.name }, "Integration connection test threw");
+      return { ok: false, message: "INTEGRATION_TEST_ERROR: provider test failed unexpectedly" };
+    }
+  }
+
+  private async testTimeoutMs() {
+    const raw = Number.parseInt((await this.settings.get("INTEGRATION_TEST_TIMEOUT_SECONDS", String(DEFAULT_TEST_TIMEOUT_SECONDS))) ?? "", 10);
+    const seconds = Number.isFinite(raw) ? Math.min(MAX_TEST_TIMEOUT_SECONDS, Math.max(MIN_TEST_TIMEOUT_SECONDS, raw)) : DEFAULT_TEST_TIMEOUT_SECONDS;
+    return seconds * 1000;
+  }
+
+  private isDisabled(connection: { status: IntegrationConnectionStatus; disabledAt: Date | null }) {
+    return connection.status === IntegrationConnectionStatus.DISABLED || connection.disabledAt !== null;
   }
 
   private requireProvider(providerKey: string): IntegrationProviderRegistration {

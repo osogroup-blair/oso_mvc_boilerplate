@@ -51,6 +51,30 @@
     </div>
   </section>
 
+  {{#if scheduleIntegrationIssues.length}}
+    <section class="rounded-lg border border-amber-200 bg-amber-50 p-5 shadow-sm">
+      <h2 class="text-lg font-semibold text-amber-900">Schedules with unavailable integrations</h2>
+      <p class="mt-1 text-sm text-amber-800">These active schedules will keep firing, but each run fails fast until the required bindings are fixed or the schedule is paused.</p>
+      <div class="mt-4 divide-y divide-amber-200">
+        {{#each scheduleIntegrationIssues}}
+          <div class="flex flex-wrap items-start justify-between gap-4 py-3">
+            <div>
+              <div class="text-sm font-medium text-gray-900">{{schedule.name}} <span class="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-900">binding unavailable</span></div>
+              <div class="mt-1 font-mono text-xs text-gray-500">{{schedule.scheduleId}} · {{workflowDefinition.name}}</div>
+              {{#each unavailable}}
+                <p class="mt-1 text-sm text-amber-900">{{label}} ({{key}}): {{status}} · {{reason}}</p>
+              {{/each}}
+            </div>
+            <div class="flex gap-3 text-sm font-medium">
+              <a href="/admin/integrations/workflow-bindings/{{workflowDefinition.id}}?orgId={{@root.activeOrg.id}}" class="text-indigo-600 hover:text-indigo-700">Fix bindings</a>
+              <a href="/admin/workflow-operations/schedules/{{schedule.id}}?orgId={{@root.activeOrg.id}}" class="text-indigo-600 hover:text-indigo-700">View schedule</a>
+            </div>
+          </div>
+        {{/each}}
+      </div>
+    </section>
+  {{/if}}
+
   <section class="rounded-lg border border-gray-200 bg-white p-5 shadow-sm">
     <div class="flex items-start justify-between gap-4">
       <div>
