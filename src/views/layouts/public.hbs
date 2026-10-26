@@ -19,7 +19,7 @@
     .theme-accent-border:hover { border-color: var(--accent) !important; }
     .theme-accent-hover:hover { color: var(--accent) !important; }
   </style>
-  <script>
+  <script nonce="{{@root.cspNonce}}">
     window.APP_USER = {
       isLoggedIn: {{#if user}}true{{else}}false{{/if}},
       role: "{{user.role}}",
@@ -93,5 +93,6 @@
       {{/if}}
     </div>
   </footer>
+<script src="/js/ui-actions.js" defer></script>
 </body>
 </html>

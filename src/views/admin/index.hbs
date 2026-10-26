@@ -7,7 +7,7 @@
 <div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-10">
   
   <!-- Pages Metric -->
-  <a href="/admin/page" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
+  {{#if (lookup @root.adminPermissions "page:read")}}<a href="/admin/page" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
     <div class="absolute top-0 left-0 h-1.5 w-full bg-indigo-500"></div>
     <div class="flex items-center justify-between">
       <div>
@@ -23,10 +23,10 @@
     <div class="mt-4 flex items-center text-xs font-medium text-indigo-600 group-hover:underline">
       Manage Pages &rarr;
     </div>
-  </a>
+  </a>{{/if}}
 
   <!-- Users Metric -->
-  <a href="/admin/user" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
+  {{#if (lookup @root.adminPermissions "user:read")}}<a href="/admin/user" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
     <div class="absolute top-0 left-0 h-1.5 w-full bg-emerald-500"></div>
     <div class="flex items-center justify-between">
       <div>
@@ -42,10 +42,10 @@
     <div class="mt-4 flex items-center text-xs font-medium text-emerald-600 group-hover:underline">
       Manage Users &rarr;
     </div>
-  </a>
+  </a>{{/if}}
 
   <!-- Logged On Metric -->
-  <a href="/admin/sessions" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
+  {{#if (lookup @root.adminPermissions "session:read")}}<a href="/admin/sessions" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
     <div class="absolute top-0 left-0 h-1.5 w-full bg-rose-500"></div>
     <div class="flex items-center justify-between">
       <div>
@@ -61,7 +61,7 @@
     <div class="mt-4 flex items-center text-xs font-medium text-rose-600 group-hover:underline">
       View Active Sessions &rarr;
     </div>
-  </a>
+  </a>{{/if}}
 
   <!-- Data Objects Metric -->
   <a href="/admin/models" class="relative group overflow-hidden bg-white p-6 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition duration-300">
@@ -89,7 +89,7 @@
   <div class="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm">
     <div class="flex items-center justify-between mb-4">
       <h3 class="text-lg font-bold text-gray-900">User Distribution by Role</h3>
-      <a href="/admin/role" class="text-xs font-semibold text-indigo-600 hover:underline">Manage Roles</a>
+      {{#if (lookup @root.adminPermissions "role:read")}}<a href="/admin/role" class="text-xs font-semibold text-indigo-600 hover:underline">Manage Roles</a>{{/if}}
     </div>
     <div class="space-y-4">
       {{#each rolesBreakdown}}
@@ -113,9 +113,9 @@
       <p class="text-sm text-gray-500">Review system permissions matrix to assign granular action permissions across custom resource domains.</p>
     </div>
     <div class="mt-6">
-      <a href="/admin/permissions" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-lg font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
+      {{#if (lookup @root.adminPermissions "role:read")}}<a href="/admin/permissions" class="inline-flex items-center px-4 py-2 bg-indigo-600 border border-transparent rounded-lg font-semibold text-xs text-white uppercase tracking-widest hover:bg-indigo-700 active:bg-indigo-900 focus:outline-none focus:border-indigo-900 focus:ring ring-indigo-300 disabled:opacity-25 transition ease-in-out duration-150">
         Permissions Matrix
-      </a>
+      </a>{{/if}}
     </div>
   </div>
 </div>

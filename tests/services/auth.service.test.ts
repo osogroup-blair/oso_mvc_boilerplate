@@ -33,7 +33,7 @@ vi.mock("../../src/lib/prisma.js", () => ({
     auditLog: {
       create: vi.fn().mockResolvedValue({}),
     },
-    $transaction: vi.fn().mockImplementation((promises) => Promise.all(promises)),
+    $transaction: vi.fn(),
   },
 }));
 
@@ -49,8 +49,10 @@ describe("AuthService", () => {
   let userModel: ReturnType<typeof makeUserModel>;
   let service: AuthService;
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
+    const { prisma } = await import("../../src/lib/prisma.js");
+    vi.mocked(prisma.$transaction).mockImplementation(((operation: any) => typeof operation === "function" ? operation(prisma) : Promise.all(operation)) as any);
     userModel = makeUserModel();
     service = new AuthService(userModel as any);
     vi.spyOn(service.log, "info");
@@ -165,5 +167,24 @@ describe("AuthService", () => {
     expect(result.message).toContain("Email verified successfully");
     expect(userModel.verifyEmailAndClearTokens).toHaveBeenCalled();
   });
+  it("never falls back to the first available role during public registration", async () => {
+    const { prisma } = await import("../../src/lib/prisma.js");
+    userModel.findByEmail.mockResolvedValue(null);
+    vi.mocked(prisma.role.findUnique).mockResolvedValue(null);
+    vi.mocked(prisma.role.findFirst).mockResolvedValue({ id: "privileged-role", name: "ADMIN" } as never);
+    await expect(service.register({ name: "Test", email: "no-default@example.invalid", password: "explicit-password" })).rejects.toMatchObject({ statusCode: 500 });
+    expect(userModel.createAuthUser).not.toHaveBeenCalled();
+  });
+  it("never puts credential records into session view payloads", async () => {
+    const { prisma } = await import("../../src/lib/prisma.js");
+    vi.mocked(prisma.session.findUnique).mockResolvedValue({ expiresAt: new Date(Date.now() + 60000), user: {
+      id: "user", name: "Test", email: "test@example.invalid", roleId: "role", isActive: true,
+      passwordHash: "HASH_CANARY", sessions: [{ token: "TOKEN_CANARY" }], role: { id: "role", name: "USER" },
+    } } as never);
+    const result = await service.verifySession("synthetic-token");
+    expect(result).toMatchObject({ id: "user", role: "USER", roleId: "role" });
+    expect(JSON.stringify(result)).not.toContain("CANARY");
+  });
+
 });
 

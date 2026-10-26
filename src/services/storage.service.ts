@@ -1,16 +1,27 @@
+import { publicStorageLocation } from "../lib/public-storage-paths.js";
+import { publicObjectHeaders } from "../lib/public-upload-policy.js";
+import { AppError } from "../lib/AppError.js";
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { writeFile, unlink, mkdir } from "node:fs/promises";
-import { join, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { join, dirname, basename } from "node:path";
 import { BaseService } from "./BaseService.js";
 import { settingService } from "./setting.service.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const rootDir = join(__dirname, "../..");
 
 export class StorageService extends BaseService {
   constructor() {
     super("StorageService");
+  }
+
+  private localPath(directory: string, key: string) {
+    if (!/^[a-f0-9-]{36}\.(png|jpg|gif|webp|pdf|zip|txt)$/i.test(key) || basename(key) !== key) throw AppError.badRequest("Invalid public object key");
+    return join(publicStorageLocation(directory, "/uploads").directory, key);
+  }
+
+  async publicPrefix() { return await settingService.get("STORAGE_PUBLIC_URL_PREFIX") || "/uploads"; }
+
+  async publicLocation() {
+    return publicStorageLocation(await settingService.get("STORAGE_LOCAL_DIR") || "public/uploads", await this.publicPrefix());
   }
 
   async upload(key: string, fileBuffer: Buffer, mimeType: string): Promise<{ url: string; provider: string }> {
@@ -36,6 +47,7 @@ export class StorageService extends BaseService {
           Key: key,
           Body: fileBuffer,
           ContentType: mimeType,
+          ContentDisposition: publicObjectHeaders(key)["Content-Disposition"],
         })
       );
 
@@ -48,9 +60,9 @@ export class StorageService extends BaseService {
     } else {
       // Local storage
       const localDir = await settingService.get("STORAGE_LOCAL_DIR") || "public/uploads";
-      const publicPrefix = await settingService.get("STORAGE_PUBLIC_URL_PREFIX") || "/uploads";
+      const { prefix: publicPrefix } = await this.publicLocation();
       
-      const absoluteUploadPath = join(rootDir, localDir, key);
+      const absoluteUploadPath = this.localPath(localDir, key);
       
       // Ensure directory exists
       await mkdir(dirname(absoluteUploadPath), { recursive: true });
@@ -83,7 +95,7 @@ export class StorageService extends BaseService {
       );
     } else {
       const localDir = await settingService.get("STORAGE_LOCAL_DIR") || "public/uploads";
-      const absolutePath = join(rootDir, localDir, key);
+      const absolutePath = this.localPath(localDir, key);
       try {
         await unlink(absolutePath);
       } catch (err: any) {

@@ -1,3 +1,12 @@
+import { commandMetadata } from "../lib/command-contracts.js";
+import { z } from "zod";
+import { DEFINED_PERMISSIONS } from "../lib/permission-definitions.js";
+import { actorAccessService } from "./actor-access.service.js";
+const roleInput = z.object({ name: z.string().min(1).max(80), description: z.string().max(2000).nullable().optional(), permissions: z.array(z.string()).max(200).optional() }).strict();
+const knownPermissions = new Set(DEFINED_PERMISSIONS.map(p => `${p.resource}:${p.action}`));
+function validatePermissions(permissions?: string[]) {
+  if (permissions?.some(key => !knownPermissions.has(key))) throw AppError.badRequest("Unknown permission");
+}
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { RoleModel } from "../models/role.model.js";
@@ -10,7 +19,8 @@ export class RoleService extends BaseService {
   constructor(
     private readonly model = new RoleModel(),
     private readonly audit: AuditService = auditService,
-    private readonly perms: PermissionsService = permissionsService
+    private readonly perms: PermissionsService = permissionsService,
+    private readonly access = actorAccessService
   ) {
     super("RoleService");
   }
@@ -37,14 +47,17 @@ export class RoleService extends BaseService {
     return role;
   }
 
-  async create(data: Prisma.RoleCreateInput, actorId?: string) {
+  async create(input: Prisma.RoleCreateInput, actorId?: string, operationId?: string) {
+    await this.access.require(actorId, "role:create");
+    const data = roleInput.parse(input);
+    validatePermissions(data.permissions);
     // Check if name is already taken
     const existing = await this.model.findByName(data.name);
     if (existing) {
       throw AppError.badRequest("Role name must be unique", [{ path: ["name"], message: "Role name must be unique" }]);
     }
 
-    const created = await this.model.create(data);
+    const created = await this.model.create(data, actorId, commandMetadata(input, operationId));
     await this.audit.record({
       actorId,
       action: "role.create",
@@ -55,7 +68,10 @@ export class RoleService extends BaseService {
     return created;
   }
 
-  async update(id: string, data: Prisma.RoleUpdateInput, actorId?: string) {
+  async update(id: string, input: Prisma.RoleUpdateInput, actorId?: string, operationId?: string) {
+    await this.access.require(actorId, "role:update");
+    const data = roleInput.partial().parse(input);
+    validatePermissions(data.permissions);
     const before = await this.getById(id);
     
     if (data.name && typeof data.name === "string" && data.name !== before.name) {
@@ -65,7 +81,7 @@ export class RoleService extends BaseService {
       }
     }
 
-    const updated = await this.model.update(id, data);
+    const updated = await this.model.update(id, data, actorId, commandMetadata(input, operationId));
     await this.audit.record({
       actorId,
       action: "role.update",
@@ -76,7 +92,8 @@ export class RoleService extends BaseService {
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
+    await this.access.require(actorId, "role:delete");
     const role = await this.getById(id);
     
     // Prevent deleting core roles that could lock out admins/users
@@ -84,7 +101,7 @@ export class RoleService extends BaseService {
       throw AppError.forbidden(`System role "${role.name}" cannot be deleted.`);
     }
 
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({
       actorId,
       action: "role.delete",

@@ -1,8 +1,8 @@
 import { BaseModel } from "./BaseModel.js";
 
 export class PasswordResetTokenModel extends BaseModel {
-  create(data: { userId: string; token: string; expiresAt: Date }) {
-    return this.db.passwordResetToken.create({ data });
+  create(data: { userId: string; token: string; expiresAt: Date }, actorId?: string) {
+    return this.mutate("passwordResetToken.create", "PasswordResetToken", actorId, tx => tx.passwordResetToken.create({ data }));
   }
 
   findByToken(token: string) {
@@ -12,8 +12,8 @@ export class PasswordResetTokenModel extends BaseModel {
     });
   }
 
-  deleteByUserId(userId: string) {
-    return this.db.passwordResetToken.deleteMany({ where: { userId } });
+  deleteByUserId(userId: string, actorId?: string) {
+    return this.mutate("passwordResetToken.deleteByUserId", "PasswordResetToken", actorId, tx => tx.passwordResetToken.deleteMany({ where: { userId } }));
   }
 }
 

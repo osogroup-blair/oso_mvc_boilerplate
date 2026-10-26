@@ -1,3 +1,7 @@
+import { publicStorageLocation } from "../lib/public-storage-paths.js";
+import { actorAccessService } from "./actor-access.service.js";
+import { commandMetadata } from "../lib/command-contracts.js";
+import { AppError } from "../lib/AppError.js";
 import { settingModel } from "../models/setting.model.js";
 import { auditService } from "./audit.service.js";
 
@@ -85,10 +89,15 @@ export const settingService = {
     return defaultValue;
   },
 
-  async set(key: string, value: string, actorId?: string): Promise<void> {
+  async set(key: string, value: string, actorId?: string, operationId?: string): Promise<void> {
+    await actorAccessService.require(actorId, "admin:settings");
+    if (!Object.hasOwn(SETTING_KEYS, key)) throw AppError.badRequest("Unknown setting key");
+    if (key === "STORAGE_LOCAL_DIR" || key === "STORAGE_PUBLIC_URL_PREFIX") publicStorageLocation(
+      key === "STORAGE_LOCAL_DIR" ? value : await this.get("STORAGE_LOCAL_DIR") || "public/uploads",
+      key === "STORAGE_PUBLIC_URL_PREFIX" ? value : await this.get("STORAGE_PUBLIC_URL_PREFIX") || "/uploads");
     const before = cache.get(key);
-    await settingModel.set(key, value);
-    cache.set(key, value);
+    await settingModel.set(key, value, actorId, commandMetadata({ key, value }, operationId));
+    await this.initCache();
     
     await auditService.record({
       actorId,
@@ -99,13 +108,16 @@ export const settingService = {
     });
   },
 
-  async setMany(entries: Record<string, string>, actorId?: string): Promise<void> {
+  async setMany(entries: Record<string, string>, actorId?: string, operationId?: string): Promise<void> {
+    await actorAccessService.require(actorId, "admin:settings");
+    if (Object.keys(entries).some(key => !Object.hasOwn(SETTING_KEYS, key))) throw AppError.badRequest("Unknown setting key");
+    if (entries.STORAGE_LOCAL_DIR !== undefined || entries.STORAGE_PUBLIC_URL_PREFIX !== undefined) publicStorageLocation(
+      entries.STORAGE_LOCAL_DIR ?? await this.get("STORAGE_LOCAL_DIR") ?? "public/uploads",
+      entries.STORAGE_PUBLIC_URL_PREFIX ?? await this.get("STORAGE_PUBLIC_URL_PREFIX") ?? "/uploads");
     const before = await this.getAll();
     
-    for (const [key, value] of Object.entries(entries)) {
-      await settingModel.set(key, value);
-      cache.set(key, value);
-    }
+    await settingModel.setMany(entries, actorId, commandMetadata(entries, operationId));
+    await this.initCache();
 
     await auditService.record({
       actorId,

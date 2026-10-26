@@ -68,7 +68,7 @@
   <pre id="log-container" class="text-xs font-mono text-gray-300 whitespace-pre-wrap break-all"></pre>
 </div>
 
-<script>
+<script nonce="{{@root.cspNonce}}">
   function formatBytes(bytes) {
     return (bytes / 1024 / 1024).toFixed(2) + ' MB';
   }

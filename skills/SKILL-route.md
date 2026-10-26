@@ -36,3 +36,11 @@ router.use("/api/widgets", widgetRoutes);
 
 ## Reference implementation
 `src/routes/user.routes.ts` and `src/routes/index.ts`.
+
+
+## October 26 audit remediation contract
+
+The protected admin boundary requires admin:access plus section-specific permissions; admin:access alone must not grant logs, settings, sessions, media or queues. Guard uploads before Multer and the entire Bull Board router before its APIs. Preserve CSRF after bounded multipart parsing. Public user-directory reads require authentication and user:read. Ownership and tenant checks remain mandatory in services.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

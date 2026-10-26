@@ -1,3 +1,4 @@
+import { z } from "zod";
 // Dedicated controller for the permissions matrix admin page.
 // GET  /admin/permissions  → renders the role × permission matrix
 // POST /admin/permissions  → saves checkbox form data, updating each role's permissions
@@ -69,23 +70,9 @@ export class PermissionAdminController {
   // Unchecked boxes are absent — we collect present ones per role.
   async saveMatrix(req: Request, res: Response, next: NextFunction) {
     try {
-      const body = (req.body ?? {}) as Record<string, unknown>;
-      // body.perm is an object: { [roleId]: { [permKey]: "on" } }
-      const permBody = (body.perm ?? {}) as Record<string, Record<string, string>>;
-
-      const allRoles = await permissionsService.getMatrix();
-
-      // For each known role, collect checked permissions and persist.
-      await Promise.all(
-        allRoles.map(async (role) => {
-          const checkedPerms = permBody[role.roleId] ?? {};
-          // A checkbox sends "on" when checked; absent = unchecked.
-          const permissions = Object.keys(checkedPerms).filter(
-            (k) => checkedPerms[k] === "on"
-          );
-          await permissionsService.setPermissions(role.roleId, permissions, req.user?.id);
-        })
-      );
+      const data = z.object({ perm: z.record(z.record(z.string().max(10))).default({}),
+        _operationId: z.string().uuid().optional() }).parse(req.body);
+      await permissionsService.saveMatrix(data.perm, req.user?.id, data._operationId);
 
       res.redirect("/admin/permissions?saved=1");
     } catch (err) {

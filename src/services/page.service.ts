@@ -1,3 +1,4 @@
+import { commandMetadata } from "../lib/command-contracts.js";
 // CMS page business logic. Mirrors UserService exactly (see SKILL-service.md).
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
@@ -44,12 +45,9 @@ export class PageService extends BaseService {
     return this.model.findPublishedPages();
   }
 
-  async create(data: PageWriteData, actorId?: string) {
+  async create(data: PageWriteData, actorId?: string, operationId?: string) {
     const { allowedRoles: roleIds, ...prismaData } = data;
-    const created = await this.model.create(prismaData as Prisma.PageCreateInput);
-    if (roleIds && roleIds.length > 0) {
-      await this.model.setAllowedRoles(created.id, roleIds);
-    }
+    const created = await this.model.create(prismaData as Prisma.PageCreateInput, actorId, commandMetadata(data, operationId), roleIds);
     await this.audit.record({
       actorId,
       action: "page.create",
@@ -60,17 +58,14 @@ export class PageService extends BaseService {
     return created;
   }
 
-  async update(id: string, data: PageWriteData, actorId?: string) {
+  async update(id: string, data: PageWriteData, actorId?: string, operationId?: string) {
     const before = await this.getById(id);
     const { allowedRoles: roleIds, ...prismaData } = data;
     if (before.isHardcoded && !STATIC_PAGE_POLICIES.has(before.slug) && roleIds !== undefined) {
       throw AppError.badRequest("This hardcoded page is inventory-only; its route owns authorization");
     }
-    const updated = await this.model.update(id, prismaData as Prisma.PageUpdateInput);
+    const updated = await this.model.update(id, prismaData as Prisma.PageUpdateInput, actorId, commandMetadata(data, operationId), roleIds);
     // Always sync the role list (empty array = clear all; undefined = leave untouched).
-    if (roleIds !== undefined) {
-      await this.model.setAllowedRoles(id, roleIds);
-    }
     await this.audit.record({
       actorId,
       action: "page.update",
@@ -81,9 +76,9 @@ export class PageService extends BaseService {
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
     await this.getById(id);
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({ actorId, action: "page.delete", entityType: "Page", entityId: id });
     return removed;
   }

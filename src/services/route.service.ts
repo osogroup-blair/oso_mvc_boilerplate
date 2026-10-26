@@ -1,3 +1,4 @@
+import { commandMetadata } from "../lib/command-contracts.js";
 // Route business logic.
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
@@ -55,7 +56,7 @@ export class RouteService extends BaseService {
     }
   }
 
-  async create(data: RouteWriteData, actorId?: string) {
+  async create(data: RouteWriteData, actorId?: string, operationId?: string) {
     if (data.targetType === "APP") {
       throw AppError.badRequest("Application routes cannot be created manually.");
     }
@@ -68,10 +69,7 @@ export class RouteService extends BaseService {
       throw AppError.badRequest(`Route pattern "${prismaData.pattern}" already exists`);
     }
 
-    const created = await this.model.create(prismaData as Prisma.RouteCreateInput);
-    if (roleIds !== undefined) {
-      await this.model.setAllowedRoles(created.id, roleIds);
-    }
+    const created = await this.model.create(prismaData as Prisma.RouteCreateInput, actorId, commandMetadata(data, operationId), roleIds);
     await this.audit.record({
       actorId,
       action: "route.create",
@@ -82,7 +80,7 @@ export class RouteService extends BaseService {
     return created;
   }
 
-  async update(id: string, data: RouteWriteData, actorId?: string) {
+  async update(id: string, data: RouteWriteData, actorId?: string, operationId?: string) {
     const before = await this.getById(id);
 
     if (before.targetType === "APP") {
@@ -103,10 +101,7 @@ export class RouteService extends BaseService {
       }
     }
 
-    const updated = await this.model.update(id, prismaData as Prisma.RouteUpdateInput);
-    if (roleIds !== undefined) {
-      await this.model.setAllowedRoles(id, roleIds);
-    }
+    const updated = await this.model.update(id, prismaData as Prisma.RouteUpdateInput, actorId, commandMetadata(data, operationId), roleIds);
     await this.audit.record({
       actorId,
       action: "route.update",
@@ -117,12 +112,12 @@ export class RouteService extends BaseService {
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
     const route = await this.getById(id);
     if (route.targetType === "APP") {
       throw AppError.badRequest("Application routes cannot be deleted manually.");
     }
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({
       actorId,
       action: "route.delete",

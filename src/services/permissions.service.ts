@@ -1,3 +1,5 @@
+import { actorAccessService } from "./actor-access.service.js";
+import { commandMetadata } from "../lib/command-contracts.js";
 // Permission enforcement service.
 // Roles store permissions as structured "resource:action" strings.
 // This service owns the canonical permission vocabulary (DEFINED_PERMISSIONS),
@@ -12,50 +14,8 @@ import { auditService, AuditService } from "./audit.service.js";
 // The admin matrix UI renders exactly these rows × roles as columns.
 // Add a new entry here to expose a new permission throughout the whole system.
 
-export interface PermissionDef {
-  resource: string;
-  action: string;
-  label: string;
-  description?: string;
-}
-
-export const DEFINED_PERMISSIONS: PermissionDef[] = [
-  // Pages
-  { resource: "page", action: "read",   label: "View Pages",      description: "Access published CMS pages" },
-  { resource: "page", action: "create", label: "Create Pages",    description: "Create new CMS pages" },
-  { resource: "page", action: "update", label: "Edit Pages",      description: "Edit existing CMS pages" },
-  { resource: "page", action: "delete", label: "Delete Pages",    description: "Delete / archive CMS pages" },
-  // Users
-  { resource: "user", action: "read",   label: "View Users",      description: "List and view user accounts" },
-  { resource: "user", action: "create", label: "Create Users",    description: "Create new user accounts" },
-  { resource: "user", action: "update", label: "Edit Users",      description: "Edit user accounts" },
-  { resource: "user", action: "delete", label: "Delete Users",    description: "Soft-delete user accounts" },
-  // Roles
-  { resource: "role", action: "read",   label: "View Roles",      description: "List and view roles" },
-  { resource: "role", action: "update", label: "Edit Roles",      description: "Modify role permissions" },
-  // Routes
-  { resource: "route", action: "read",   label: "View Routes",    description: "View dynamic routes" },
-  { resource: "route", action: "create", label: "Create Routes",  description: "Create new dynamic routes" },
-  { resource: "route", action: "update", label: "Edit Routes",    description: "Edit dynamic routes" },
-  { resource: "route", action: "delete", label: "Delete Routes",  description: "Delete dynamic routes" },
-  // Navigation
-  { resource: "navigationItem", action: "read",   label: "View Nav Links",    description: "List and view navigation links" },
-  { resource: "navigationItem", action: "create", label: "Create Nav Links",  description: "Create new navigation links" },
-  { resource: "navigationItem", action: "update", label: "Edit Nav Links",    description: "Edit navigation links" },
-  { resource: "navigationItem", action: "delete", label: "Delete Nav Links",  description: "Delete navigation links" },
-  // Admin access
-  { resource: "admin", action: "access", label: "Admin Access",   description: "Access the admin area at all" },
-  { resource: "admin", action: "logs",   label: "View Logs",      description: "View audit logs and diagnostics" },
-  { resource: "admin", action: "settings", label: "Site Settings", description: "Edit global site settings" },
-  // Workflows
-  { resource: "workflow", action: "read", label: "View Workflows", description: "View enabled workflow catalog entries" },
-  { resource: "workflow", action: "start", label: "Start Workflows", description: "Start permitted workflows" },
-  { resource: "workflow", action: "act", label: "Act on Workflows", description: "Submit permitted workflow actions" },
-  { resource: "workflow", action: "cancel", label: "Cancel Workflows", description: "Cancel permitted workflow executions" },
-  { resource: "workflow", action: "admin", label: "Admin Workflows", description: "Configure workflow definitions and role policy" },
-  // Integrations
-  { resource: "integration", action: "admin", label: "Admin Integrations", description: "Manage organization integration connections and workflow bindings" },
-] as const;
+import { DEFINED_PERMISSIONS, type PermissionDef } from "../lib/permission-definitions.js";
+export { DEFINED_PERMISSIONS, type PermissionDef } from "../lib/permission-definitions.js";
 
 // Helper: format a resource+action into a canonical permission key.
 export function permKey(resource: string, action: string): string {
@@ -84,7 +44,8 @@ export interface RolePermissionRow {
 export class PermissionsService extends BaseService {
   constructor(
     private readonly model = new RoleModel(),
-    private readonly audit: AuditService = auditService
+    private readonly audit: AuditService = auditService,
+    private readonly access = actorAccessService
   ) {
     super("PermissionsService");
   }
@@ -142,7 +103,8 @@ export class PermissionsService extends BaseService {
   // ── Matrix write ──────────────────────────────────────────────────────────
 
   // Replace the full permissions array for a given role (by ID), audited.
-  async setPermissions(roleId: string, permissions: string[], actorId?: string): Promise<void> {
+  async setPermissions(roleId: string, permissions: string[], actorId?: string, operationId?: string): Promise<void> {
+    await this.access.require(actorId, "role:update");
     const before = await this.model.findById(roleId);
     if (!before) throw AppError.notFound("Role");
 
@@ -150,7 +112,7 @@ export class PermissionsService extends BaseService {
     const known = new Set(DEFINED_PERMISSIONS.map((p) => permKey(p.resource, p.action)));
     const cleaned = permissions.filter((p) => known.has(p));
 
-    await this.model.update(roleId, { permissions: cleaned });
+    await this.model.update(roleId, { permissions: cleaned }, actorId, commandMetadata({ roleId, permissions: cleaned }, operationId));
 
     await this.audit.record({
       actorId,
@@ -161,6 +123,15 @@ export class PermissionsService extends BaseService {
     });
 
     this.log.info({ roleId, permissions: cleaned }, "Role permissions updated");
+  }
+
+  async saveMatrix(checked: Record<string, Record<string, string>>, actorId?: string, operationId?: string) {
+    const actor = await this.access.require(actorId, "role:update");
+    const known = new Set(DEFINED_PERMISSIONS.map(p => permKey(p.resource, p.action)));
+    const roles = await this.model.listAll();
+    const entries = roles.map(role => ({ id: role.id, permissions: Object.entries(checked[role.id] ?? {})
+      .filter(([key, value]) => value === "on" && known.has(key)).map(([key]) => key) }));
+    return this.model.replacePermissions(entries, actor.id, commandMetadata(entries, operationId));
   }
 
   // ── Legacy helpers (kept for backward compat) ─────────────────────────────

@@ -259,7 +259,7 @@ describe("WorkflowExecutionService", () => {
     );
 
     expect(temporal.cancelWorkflow).toHaveBeenCalledWith("org-org-1.platform.test.demo", "run-1");
-    expect(executions.update).toHaveBeenCalledWith("exec-1", {stateSummary:{cancelRequested:true}});
+    expect(executions.update).toHaveBeenCalledWith("exec-1", {stateSummary:{cancelRequested:true}}, "user-1");
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
       actorId: "user-1",
       action: "workflowExecution.cancel",

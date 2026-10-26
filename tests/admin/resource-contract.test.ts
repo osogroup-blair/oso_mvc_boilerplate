@@ -99,7 +99,7 @@ it("preserves the inherited unscoped resource interface", async () => {
   state.legacy.mockReturnValue({ list: async () => [{ id: "legacy-a", name: "Legacy" }], count: async () => 1 });
   const result = await invoke("list", "legacy", "ADMIN");
   expect(result.next).not.toHaveBeenCalled(); expect(state.legacy).toHaveBeenCalledWith("legacy");
-  expect(new AdminResourceService().form(schema)).toEqual({});
+  expect(new AdminResourceService().form(schema)).toMatchObject({ adminMetadata: { operationId: expect.any(String), deleteOperationId: expect.any(String) } });
 });
 
 it("rejects readonly records and excludes undeclared/readonly mutation fields in legacy forms", async () => {
@@ -110,7 +110,7 @@ it("rejects readonly records and excludes undeclared/readonly mutation fields in
   state.legacy.mockReturnValue({ getById: async () => ({ id: "legacy-a" }), update });
   const result = await invoke("update", "legacy", "ADMIN", { body: { name: "Safe", managed: false, deletedAt: "forged", _csrf: "token" } });
   expect(result.next).not.toHaveBeenCalled();
-  expect(update).toHaveBeenCalledWith("legacy-a", { name: "Safe" }, "actor");
+  expect(update).toHaveBeenCalledWith("legacy-a", { name: "Safe" }, "actor", expect.any(String));
   schema.isRecordReadonly = () => true;
   const denied = await invoke("update", "legacy", "ADMIN", { body: { name: "changed" } });
   expect(denied.next.mock.calls[0][0]).toMatchObject({ statusCode: 403 });

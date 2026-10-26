@@ -23,7 +23,8 @@ function bounded(value: unknown, depth = 0): void {
 export class AdminResourceService {
   async open(schema: AdminSchema, legacy: () => AdminResource, input: { actor?: AdminActor; requestedOrgId?: unknown; action: AdminAction }, body?: Record<string, unknown>) {
     const adapter = schema.adapter;
-    if (!adapter) return { resource: legacy(), context: undefined, mutation: undefined };
+    if (!adapter) return { resource: legacy(), context: undefined,
+      mutation: body ? metadataSchema.parse({ operationId: body._adminOperationId ?? randomUUID() }) : undefined };
     if (!input.actor) throw AppError.unauthorized();
     const requestedOrgId = z.string().min(1).max(160).optional().parse(input.requestedOrgId);
     const context = await adapter.resolveContext({ actor: input.actor, requestedOrgId, action: input.action });
@@ -50,7 +51,8 @@ export class AdminResourceService {
   }
 
   form(schema: AdminSchema, context?: AdminResourceContext, record: Record<string, unknown> = {}, isNew = false) {
-    if (!schema.adapter || !context) return {};
+    if (!schema.adapter || !context) return { adminMetadata: { orgId: undefined, operationId: randomUUID() as string,
+      deleteOperationId: randomUUID() as string, expectedVersion: undefined as number | undefined, versionSet: false } };
     const expectedVersion = isNew ? undefined : schema.adapter.version?.(record);
     if (expectedVersion !== undefined) z.number().int().min(0).max(Number.MAX_SAFE_INTEGER).parse(expectedVersion);
     const metadata = { orgId: context.orgId, operationId: randomUUID() as string, deleteOperationId: randomUUID() as string, expectedVersion, versionSet: expectedVersion !== undefined };

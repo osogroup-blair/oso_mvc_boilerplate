@@ -96,3 +96,11 @@ export function requirePermission(resource: string, action: string) {
 
 
 
+
+export async function injectAdminPermissions(req: Request, res: Response, next: NextFunction) {
+  try {
+    const permissions = await permissionsService.getActionsForRole(req.user!.role);
+    res.locals.adminPermissions = Object.fromEntries(permissions.map(key => [key, true]));
+    next();
+  } catch (error) { next(error); }
+}

@@ -13,7 +13,7 @@ export const roleSchema: AdminSchema = {
       key: "permissions",
       type: "array",
       itemType: "text",
-      help: "List of permission actions (e.g. read, create, update, delete)",
+      help: "Structured permission keys (e.g. page:read, user:update). Unknown keys are rejected.",
     },
   ],
 };

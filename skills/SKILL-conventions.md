@@ -114,3 +114,11 @@ uses metadata only. Tenant admin adapters must resolve access before record or
 option reads and delegate CAS/receipt semantics to resource services/models.
 Existing self-hosted Temporal executions require reviewed prior histories
 before Workflow command changes; an empty corpus is a blocked release gate.
+
+
+## October 26 audit remediation contract
+
+Account/API queries use explicit safe selects; credential lookup is auth-only. Protected domain commands resolve current actors through ActorAccessService and check ownership/membership as well as global permissions. Record IDs use the bounded recordId schema (named seed IDs remain valid); operation identities are UUIDs. Never restore predictable provisioning passwords or infer authority from an ADMIN role name.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

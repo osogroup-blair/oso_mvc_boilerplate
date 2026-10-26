@@ -164,7 +164,7 @@ describe("WorkflowScheduleService", () => {
         paused: false,
         nextActionTimes: ["2026-08-14T13:00:00.000Z"],
       }),
-    }));
+    }), "user-1");
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
       actorId: "user-1",
       action: "workflowSchedule.create",

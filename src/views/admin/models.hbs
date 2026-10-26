@@ -6,15 +6,15 @@
 <!-- Tabs -->
 <div class="mb-8 border-b border-gray-200">
   <nav class="-mb-px flex space-x-4 items-center" aria-label="Tabs" id="models-tabs">
-    <button onclick="switchTab('application')" id="tab-application" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600">
+    <button data-tab="application" id="tab-application" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-indigo-500 text-indigo-600">
       Application Models
     </button>
     <span class="text-gray-300 font-light mb-1">|</span>
-    <button onclick="switchTab('system')" id="tab-system" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+    <button data-tab="system" id="tab-system" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
       System Models
     </button>
     <span class="text-gray-300 font-light mb-1">|</span>
-    <button onclick="switchTab('diagnostics')" id="tab-diagnostics" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
+    <button data-tab="diagnostics" id="tab-diagnostics" class="whitespace-nowrap py-4 px-1 border-b-2 font-medium text-sm border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300">
       Diagnostics
     </button>
   </nav>
@@ -70,7 +70,7 @@
   </div>
 </div>
 
-<script>
+<script nonce="{{@root.cspNonce}}">
   function switchTab(tabId) {
     // Hide all contents
     document.querySelectorAll('.tab-content').forEach(el => {

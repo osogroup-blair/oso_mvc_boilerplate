@@ -116,7 +116,7 @@ export class WorkflowCatalogService extends BaseService {
     actorId?: string
   ) {
     const before = await this.getById(id);
-    const updated = await this.model.update(id, data);
+    const updated = await this.model.update(id, data, actorId);
 
     await this.audit.record({
       actorId,
@@ -151,7 +151,7 @@ export class WorkflowCatalogService extends BaseService {
       (entry) => validRoleIds.has(entry.roleId) && validCapabilities.has(entry.capability)
     );
 
-    await this.model.replaceRolePolicy(id, cleaned);
+    await this.model.replaceRolePolicy(id, cleaned, actorId);
     const after = await this.getById(id);
 
     await this.audit.record({

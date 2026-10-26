@@ -60,3 +60,11 @@ provider and capability requirements. Workflow callers select bindings through
 that same primitive. Keep returned adapters/secrets out of Workflows and views.
 
 See `docs/blueprint/EXTENSION-CONTRACTS.md` for security and acceptance limits.
+
+
+## October 26 audit remediation contract
+
+BaseModel.mutate commits metadata evidence and state together, with optional typed command receipts and safe replay readers. Preserve existing workflow/private ledgers rather than layering an independent engine over them. General AuditService is still best-effort telemetry. Public media uses byte/type/extension checks, bounded raster re-encoding, generated keys, download/sandbox/nosniff headers and a separate policy from PrivateAsset. Remote S3/CDN headers and legacy-object inventory need deployment acceptance.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

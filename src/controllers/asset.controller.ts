@@ -72,7 +72,7 @@ export class AssetController {
   async delete(req: Request, res: Response, next: NextFunction) {
     try {
       const { id } = req.params;
-      await assetService.delete(id);
+      await assetService.delete(id, req.user?.id);
       res.redirect("/admin/assets?deleted=1");
     } catch (err) {
       next(err);

@@ -53,6 +53,43 @@ try{
  await page.goto(`${base}/admin/login`);await page.locator('[name="email"]').fill("alice@example.com");await page.locator('[name="password"]').fill("password123");
  await Promise.all([page.waitForURL(`${base}/admin`),page.locator('button[type="submit"]').click()]);results.push("actual login and CSRF form");
  for(const path of ["/","/pages/welcome","/projects","/admin/user","/admin/page","/admin/organizations","/admin/settings","/admin/logs/diagnostics"]){const response=await page.goto(base+path);assert.equal(response.status(),200,path);}results.push("public/admin pages");
+ // Audit regression checks use only this runner's disposable users, DB and upload root.
+ const loginFixture=async(email)=>{
+   const formResponse=await fetch(`${base}/admin/login`);const html=await formResponse.text();
+   const csrf=html.match(/name="_csrf"\s+value="([^"]+)"/)[1];
+   const csrfCookie=formResponse.headers.getSetCookie().find(v=>v.startsWith('csrf=')).split(';')[0];
+   const response=await fetch(`${base}/admin/login`,{method:'POST',headers:{cookie:csrfCookie,'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({email,password:'password123',_csrf:csrf,returnTo:'https://attacker.invalid'}),redirect:'manual'});
+   assert.equal(response.headers.get('location'),'/admin','unsafe login returnTo');
+   const session=response.headers.getSetCookie().find(v=>v.startsWith('session=')).split(';')[0];
+   return {cookie:`${csrfCookie}; ${session}`,csrf};
+ };
+ const aliceHttp=await loginFixture('alice@example.com');const bobHttp=await loginFixture('bob@example.com');
+ const jsonRequest=(identity,path,method='GET',data)=>fetch(base+path,{method,redirect:'manual',headers:{cookie:identity.cookie,'x-csrf-token':identity.csrf,accept:'application/json','content-type':'application/json'},...(data?{body:JSON.stringify(data)}:{})});
+ assert.equal((await fetch(`${base}/api/users`,{headers:{accept:'application/json'}})).status,401);
+ const directory=await jsonRequest(aliceHttp,'/api/users');assert.equal(directory.status,200);assert(!JSON.stringify(await directory.json()).includes('passwordHash'));
+ for(const path of ['/api/users','/admin/logs/audit','/admin/logs/diagnostics','/admin/sessions','/admin/assets','/admin/settings','/admin/jobs/api/queues'])assert.equal((await jsonRequest(bobHttp,path)).status,403,path);
+ const securityProject=await prisma.project.create({data:{name:'audit-owned',ownerId:alice.id}});
+ const securityOther=await prisma.project.create({data:{name:'audit-other-parent',ownerId:alice.id}});
+ const securityTask=await prisma.task.create({data:{title:'audit-task-original',projectId:securityProject.id}});
+ assert.equal((await jsonRequest(bobHttp,`/projects/${securityProject.id}`,'POST',{name:'unauthorized',status:'ACTIVE'})).status,403);
+ assert.equal((await jsonRequest(bobHttp,`/api/projects/${securityProject.id}/tasks/${securityTask.id}`,'PATCH',{title:'unauthorized'})).status,403);
+ assert.equal((await jsonRequest(aliceHttp,`/api/projects/${securityOther.id}/tasks/${securityTask.id}`,'DELETE')).status,404);
+ assert.equal((await prisma.task.findUniqueOrThrow({where:{id:securityTask.id}})).title,'audit-task-original');
+ const securityOrg=await prisma.organization.create({data:{name:'audit-private-org',slug:`audit-${manifest.runId}`,members:{create:{userId:alice.id,role:'OWNER'}}}});
+ const securityMember=await prisma.orgMember.findUniqueOrThrow({where:{orgId_userId:{orgId:securityOrg.id,userId:alice.id}}});
+ assert.equal((await jsonRequest(bobHttp,`/admin/organizations/${securityOrg.id}`)).status,403);
+ assert.equal((await jsonRequest(bobHttp,`/admin/organizations/${securityOrg.id}/members/${securityMember.id}/role`,'POST',{role:'MEMBER'})).status,403);
+ assert.equal((await prisma.orgMember.findUniqueOrThrow({where:{id:securityMember.id}})).role,'OWNER');
+ const maliciousName=`audit-${manifest.runId}.html`;const badUpload=new FormData();badUpload.append('_csrf',aliceHttp.csrf);badUpload.append('file',new Blob(['<script>localStorage.setItem("audit-executed","yes")</script>'],{type:'image/png'}),maliciousName);
+ const rejectedUpload=await fetch(`${base}/admin/assets/upload`,{method:'POST',headers:{cookie:aliceHttp.cookie,accept:'application/json'},body:badUpload});assert.equal(rejectedUpload.status,400);assert.equal(await prisma.asset.count({where:{filename:maliciousName}}),0);
+ await mkdir(resolve(root,'uploads'),{recursive:true});await writeFile(resolve(root,'uploads',maliciousName),'<script>localStorage.setItem("audit-executed","yes")</script>');
+ const oldUpload=await fetch(`${base}/uploads/${maliciousName}`);assert.equal(oldUpload.headers.get('content-disposition'),'attachment');assert(oldUpload.headers.get('content-security-policy').includes('sandbox'));assert.equal(oldUpload.headers.get('content-type'),'application/octet-stream');
+ const maliciousTab=await context.newPage();await maliciousTab.goto(`${base}/uploads/${maliciousName}`).catch(()=>{});await maliciousTab.close();assert.equal(await page.evaluate(()=>localStorage.getItem('audit-executed')),null);
+ const changedPrefix=await jsonRequest(aliceHttp,'/admin/settings','POST',{STORAGE_PUBLIC_URL_PREFIX:'/media'});assert.equal(changedPrefix.status,302);
+ assert.equal((await fetch(`${base}/media/${maliciousName}`)).headers.get('content-disposition'),'attachment');
+ assert.equal((await jsonRequest(aliceHttp,'/admin/settings','POST',{STORAGE_PUBLIC_URL_PREFIX:'/uploads'})).status,302);
+ results.push('audit security: directory DTO/auth, section gates, ownership, task parent, tenant roles, upload rejection/legacy sandbox/custom prefix, safe login redirect');
+
  assert.equal(await page.evaluate(async()=> (await fetch('/projects',{method:'POST',body:new URLSearchParams({name:'Rejected'})})).status),403);results.push("missing CSRF rejected");
  await page.goto(`${base}/admin/jobs`);
  const queueChecks=await page.evaluate(async()=>{

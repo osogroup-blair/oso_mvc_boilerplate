@@ -159,7 +159,7 @@ describe("WorkflowCatalogService", () => {
 
     expect(model.replaceRolePolicy).toHaveBeenCalledWith("def-1", [
       { roleId: "role-1", capability: WorkflowCapability.START },
-    ]);
+    ], "actor-1");
     expect(audit.record).toHaveBeenCalledWith(expect.objectContaining({
       actorId: "actor-1",
       action: "workflowDefinition.roles.update",

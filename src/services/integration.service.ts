@@ -186,7 +186,7 @@ export class IntegrationService extends BaseService {
       status: this.isDisabled(before) ? IntegrationConnectionStatus.DISABLED : IntegrationConnectionStatus.ACTIVE,
       lastTestStatus: IntegrationTestStatus.NOT_TESTED,
       lastTestMessage: "Credentials rotated; run a connection test.",
-    });
+    }, actor.userId);
 
     await this.audit.record({
       actorId: actor.userId,
@@ -209,7 +209,7 @@ export class IntegrationService extends BaseService {
     const updated = await this.connections.update(id, {
       status: IntegrationConnectionStatus.DISABLED,
       disabledAt: new Date(),
-    });
+    }, actor.userId);
 
     await this.audit.record({
       actorId: actor.userId,
@@ -238,7 +238,7 @@ export class IntegrationService extends BaseService {
         : result.ok ? IntegrationConnectionStatus.ACTIVE : IntegrationConnectionStatus.CONFIG_ERROR,
       lastTestStatus,
       lastTestMessage: result.message,
-    });
+    }, actor.userId);
     const stale = written === 0;
 
     await this.audit.record({
@@ -300,7 +300,7 @@ export class IntegrationService extends BaseService {
       requirementKey: requirement.key,
       connectionId: connection.id,
       isEnabled: input.isEnabled,
-    });
+    }, actor.userId);
 
     await this.audit.record({
       actorId: actor.userId,

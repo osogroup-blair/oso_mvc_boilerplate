@@ -5,11 +5,11 @@
       <h1 class="text-3xl font-bold text-gray-900 tracking-tight">Organizations</h1>
       <p class="mt-1 text-sm text-gray-500">Manage B2B workspaces and team memberships.</p>
     </div>
-    <button onclick="document.getElementById('create-org-modal').classList.remove('hidden')"
+    {{#if (lookup @root.adminPermissions "organization:create")}}<button data-modal-open="create-org-modal"
       class="inline-flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg shadow hover:bg-indigo-700 transition-colors">
       <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
       New Organization
-    </button>
+    </button>{{/if}}
   </div>
 
   {{#if query.deleted}}
@@ -71,6 +71,7 @@
     </div>
     <form action="/admin/organizations" method="POST" class="px-6 py-6 space-y-4">
   <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+  <input type="hidden" name="_operationId" value="{{@root.operationId}}" />
       <div>
         <label for="org-name" class="block text-sm font-medium text-gray-700 mb-1">Organization Name</label>
         <input id="org-name" name="name" type="text" required placeholder="Acme Corp"
@@ -86,7 +87,7 @@
           class="flex-1 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 transition-colors">
           Create
         </button>
-        <button type="button" onclick="document.getElementById('create-org-modal').classList.add('hidden')"
+        <button type="button" data-modal-close="create-org-modal"
           class="flex-1 py-2 border border-gray-300 text-sm font-semibold rounded-lg text-gray-700 hover:bg-gray-50 transition-colors">
           Cancel
         </button>

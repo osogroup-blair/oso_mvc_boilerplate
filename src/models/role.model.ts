@@ -1,3 +1,4 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
@@ -87,19 +88,26 @@ export class RoleModel extends BaseModel {
       orderBy: { name: "asc" },
     });
   }
-  create(data: Prisma.RoleCreateInput) {
-    return this.db.role.create({ data });
+  replacePermissions(entries: Array<{ id: string; permissions: string[] }>, actorId: string, command?: CommandMetadata) {
+    return this.mutate("role.permissions.matrix", "Role", actorId, async tx => {
+      for (const entry of entries) await tx.role.update({ where: { id: entry.id, deletedAt: null }, data: { permissions: entry.permissions } });
+      return { id: "matrix", count: entries.length };
+    }, "matrix", command, async () => ({ id: "matrix", count: entries.length }));
   }
 
-  update(id: string, data: Prisma.RoleUpdateInput) {
-    return this.db.role.update({ where: { id }, data });
+  create(data: Prisma.RoleCreateInput, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("role.create", "Role", actorId, tx => tx.role.create({ data }), undefined, command, (tx, resultId) => tx.role.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  softDelete(id: string) {
-    return this.db.role.update({
+  update(id: string, data: Prisma.RoleUpdateInput, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("role.update", "Role", actorId, tx => tx.role.update({ where: { id }, data }), id, command, (tx, resultId) => tx.role.findUniqueOrThrow({ where: { id: resultId } }));
+  }
+
+  softDelete(id: string, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("role.softDelete", "Role", actorId, tx => tx.role.update({
       where: { id },
       data: { deletedAt: new Date() },
-    });
+    }), id, command, (tx, resultId) => tx.role.findUniqueOrThrow({ where: { id: resultId } }));
   }
 }
 

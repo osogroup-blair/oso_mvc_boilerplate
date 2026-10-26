@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { authService } from "../services/auth.service.js";
+import { safeRedirect } from "../lib/safe-redirect.js";
 import { config } from "../config/index.js";
 
 const loginSchema = z.object({
@@ -19,7 +20,7 @@ export class AdminAuthController {
       layout: "main",
       title: "Login",
       hideNav: true,
-      returnTo: req.query.returnTo || "",
+      returnTo: safeRedirect(req.query.returnTo),
     });
   }
 
@@ -39,7 +40,7 @@ export class AdminAuthController {
         maxAge,
       });
 
-      res.redirect(returnTo || "/admin");
+      res.redirect(safeRedirect(returnTo));
     } catch (err) {
       // Re-render form with errors
       const errorMsg = err instanceof Error ? err.message : "Authentication failed";
@@ -49,7 +50,7 @@ export class AdminAuthController {
         hideNav: true,
         error: errorMsg,
         email: req.body.email || "",
-        returnTo: req.body.returnTo || "",
+        returnTo: safeRedirect(req.body.returnTo),
       });
     }
   }

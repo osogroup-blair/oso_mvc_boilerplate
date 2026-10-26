@@ -1,3 +1,4 @@
+import { commandMetadata } from "../lib/command-contracts.js";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { TagModel } from "../models/tag.model.js";
@@ -27,10 +28,10 @@ export class TagService extends BaseService {
     return found;
   }
 
-  async create(data: Prisma.TagCreateInput, actorId?: string) {
+  async create(data: Prisma.TagCreateInput, actorId?: string, operationId?: string) {
     const existing = await this.model.findByName(data.name);
     if (existing) throw AppError.conflict(`Tag "${data.name}" already exists`);
-    const created = await this.model.create(data);
+    const created = await this.model.create(data, actorId, commandMetadata(data, operationId));
     await this.audit.record({
       actorId,
       action: "tag.create",
@@ -41,9 +42,9 @@ export class TagService extends BaseService {
     return created;
   }
 
-  async update(id: string, data: Prisma.TagUpdateInput, actorId?: string) {
+  async update(id: string, data: Prisma.TagUpdateInput, actorId?: string, operationId?: string) {
     const before = await this.getById(id);
-    const updated = await this.model.update(id, data);
+    const updated = await this.model.update(id, data, actorId, commandMetadata(data, operationId));
     await this.audit.record({
       actorId,
       action: "tag.update",
@@ -54,9 +55,9 @@ export class TagService extends BaseService {
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
     await this.getById(id);
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({
       actorId,
       action: "tag.delete",

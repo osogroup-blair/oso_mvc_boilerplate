@@ -1,3 +1,4 @@
+import { recordId } from "../lib/identifiers.js";
 // Example REST controller (non-admin). Shows the standard flow:
 //   validate → call service → wrap in response envelope.
 import type { Request, Response, NextFunction } from "express";
@@ -7,7 +8,8 @@ import { listQuerySchema, toListParams, buildMeta } from "../lib/query.js";
 import { ok } from "../lib/response.js";
 
 const createUserSchema = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(120),
+  password: z.string().min(8).max(256),
   email: z.string().email(),
   role: z.enum(["ADMIN", "EDITOR", "USER"]).default("USER"),
 });
@@ -29,7 +31,7 @@ export class UserController {
 
   async getOne(req: Request, res: Response, next: NextFunction) {
     try {
-      const user = await userService.getById(req.params.id);
+      const user = await userService.getById(recordId.parse(req.params.id));
       res.json(ok(user));
     } catch (err) {
       next(err);
@@ -39,7 +41,7 @@ export class UserController {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const data = createUserSchema.parse(req.body);
-      const user = await userService.create(data, req.user?.id);
+      const user = await userService.create(data, req.user?.id, z.string().uuid().optional().parse(req.get("Idempotency-Key")));
       res.status(201).json(ok(user));
     } catch (err) {
       next(err);

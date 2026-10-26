@@ -1,3 +1,4 @@
+import { ADMIN_PERMISSIONS } from "../src/lib/permission-definitions.js";
 // Seed realistic dev data. Idempotent via upsert.
 import { PrismaClient } from "@prisma/client";
 import { authService } from "../src/services/auth.service.js";
@@ -6,16 +7,7 @@ import { credentialEncryptionService } from "../src/services/credential-encrypti
 const prisma = new PrismaClient();
 
 async function main() {
-  const adminPermissions = [
-    "page:read", "page:create", "page:update", "page:delete",
-    "user:read", "user:create", "user:update", "user:delete",
-    "role:read", "role:update",
-    "route:read", "route:create", "route:update", "route:delete",
-    "navigationItem:read", "navigationItem:create", "navigationItem:update", "navigationItem:delete",
-    "admin:access", "admin:logs", "admin:settings",
-    "workflow:read", "workflow:start", "workflow:act", "workflow:cancel", "workflow:admin",
-    "integration:admin",
-  ];
+  const adminPermissions = ADMIN_PERMISSIONS;
   const editorPermissions = ["page:read", "page:create", "page:update", "admin:access", "workflow:read"];
   const userPermissions = ["page:read", "workflow:read"];
 

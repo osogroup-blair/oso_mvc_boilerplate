@@ -83,3 +83,11 @@ uses metadata only. Tenant admin adapters must resolve access before record or
 option reads and delegate CAS/receipt semantics to resource services/models.
 Existing self-hosted Temporal executions require reviewed prior histories
 before Workflow command changes; an empty corpus is a blocked release gate.
+
+
+## October 26 audit remediation contract
+
+Use ActorAccessService (injected for tests) for current actor checks in protected account/project/task/organization commands. Pass an optional stable operation UUID through commandMetadata(input, operationId) to model commands. Model-owned state/evidence transactions are authoritative; a later AuditService.record is operational telemetry. See MUTATION-EVIDENCE-MATRIX.md for staged/external effects and replay limitations. The older template above illustrates layering, not sufficient authorization or authoritative audit.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

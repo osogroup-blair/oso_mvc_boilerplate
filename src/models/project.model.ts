@@ -1,3 +1,4 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
@@ -54,8 +55,8 @@ export class ProjectModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.ProjectCreateInput) {
-    return this.db.project.create({ data });
+  create(data: Prisma.ProjectCreateInput, actorId?: string) {
+    return this.mutate("project.create", "Project", actorId, tx => tx.project.create({ data }));
   }
 
   /** Reference command: state + metadata receipt commit atomically, with replay. */
@@ -94,11 +95,11 @@ export class ProjectModel extends BaseModel {
     }
   }
 
-  update(id: string, data: Prisma.ProjectUpdateInput) {
-    return this.db.project.update({ where: { id }, data });
+  update(id: string, data: Prisma.ProjectUpdateInput, actorId?: string, ownerId?: string, command?: CommandMetadata) {
+    return this.mutate("project.update", "Project", actorId, tx => tx.project.update({ where: { id, ownerId, deletedAt: null }, data }), id, command, (tx, resultId) => tx.project.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  softDelete(id: string) {
-    return this.db.project.update({ where: { id }, data: { deletedAt: new Date() } });
+  softDelete(id: string, actorId?: string, ownerId?: string, command?: CommandMetadata) {
+    return this.mutate("project.delete", "Project", actorId, tx => tx.project.update({ where: { id, ownerId, deletedAt: null }, data: { deletedAt: new Date() } }), id, command, (tx, resultId) => tx.project.findUniqueOrThrow({ where: { id: resultId } }));
   }
 }

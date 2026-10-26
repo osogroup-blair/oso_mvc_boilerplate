@@ -6,9 +6,9 @@ export interface AdminResource {
   listAll(): Promise<Record<string, unknown>[]>;
   count(search?: string): Promise<number>;
   getById(id: string): Promise<Record<string, unknown> | null>;
-  create(data: Record<string, unknown>, actorId?: string): Promise<Record<string, unknown>>;
-  update(id: string, data: Record<string, unknown>, actorId?: string): Promise<Record<string, unknown>>;
-  remove(id: string, actorId?: string): Promise<Record<string, unknown>>;
+  create(data: Record<string, unknown>, actorId?: string, operationId?: string): Promise<Record<string, unknown>>;
+  update(id: string, data: Record<string, unknown>, actorId?: string, operationId?: string): Promise<Record<string, unknown>>;
+  remove(id: string, actorId?: string, operationId?: string): Promise<Record<string, unknown>>;
 }
 export type AdminAction = "read" | "create" | "update" | "delete";
 export interface AdminActor { id: string; role: string }

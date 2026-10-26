@@ -1,3 +1,4 @@
+import { safeUser } from "../lib/user-contracts.js";
 import { randomUUID, createHash, scryptSync, randomBytes, timingSafeEqual } from "node:crypto";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
@@ -65,7 +66,7 @@ export class AuthService extends BaseService {
       throw AppError.conflict("An account with this email address already exists");
     }
 
-    const role = (await this.roles.findByName("User")) ?? (await this.roles.findFirst());
+    const role = await this.roles.findByName("USER");
     if (!role) {
       throw new AppError("Default user role is not configured", 500, "INTERNAL_ERROR");
     }
@@ -113,7 +114,7 @@ export class AuthService extends BaseService {
     });
 
     return {
-      user,
+      user: safeUser(user),
       verificationToken: config.isProd ? undefined : rawVerificationToken,
     };
   }
@@ -127,6 +128,7 @@ export class AuthService extends BaseService {
       throw AppError.unauthorized("Invalid credentials");
     }
 
+    if (user.role?.deletedAt) throw AppError.forbidden("Your role is deactivated");
     if (!user.isActive) {
       throw AppError.forbidden("Your account is deactivated");
     }
@@ -143,7 +145,7 @@ export class AuthService extends BaseService {
     });
 
     this.log.info({ userId: user.id }, "User logged in");
-    return { token, user };
+    return { token, user: safeUser(user) };
   }
 
   async verifySession(token: string) {
@@ -152,11 +154,11 @@ export class AuthService extends BaseService {
       throw AppError.unauthorized("Session invalid or expired");
     }
     const user = session.user;
-    if (!user.isActive || user.deletedAt) {
+    if (!user.isActive || user.deletedAt || user.role.deletedAt) {
       throw AppError.unauthorized("Account disabled");
     }
     return {
-      ...user,
+      ...safeUser(user),
       role: user.role.name,
       roleId: user.role.id,
     };
@@ -172,7 +174,7 @@ export class AuthService extends BaseService {
         entityType: "Session",
         entityId: session.id,
       });
-      await this.sessions.deleteByToken(hashed);
+      await this.sessions.deleteByToken(hashed, session.userId);
     }
   }
 

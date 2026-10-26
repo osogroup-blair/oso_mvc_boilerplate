@@ -4,6 +4,7 @@ import type { Server } from "node:http";
 const upload = vi.hoisted(() => vi.fn((req: any, res: any) => res.json({ size: req.file?.size })));
 vi.mock("../../src/middleware/auth.js", () => ({
   requireAuth: (req: any, _res: any, next: any) => { req.user = { id: "synthetic", role: "ADMIN" }; next(); },
+  injectAdminPermissions: (_req: any, _res: any, next: any) => next(),
   requirePermission: () => (_req: any, _res: any, next: any) => next(),
 }));
 vi.mock("../../src/controllers/asset.controller.js", () => ({ assetController: new Proxy({}, { get: (_target, key) => key === "upload" ? upload : vi.fn() }) }));

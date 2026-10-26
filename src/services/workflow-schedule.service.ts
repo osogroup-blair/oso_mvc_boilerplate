@@ -176,7 +176,7 @@ export class WorkflowScheduleService extends BaseService {
         lastTemporalStatus: this.temporalStatusJson(temporalDescription),
         lastSyncedAt: new Date(),
         pausedAt: temporalDescription.paused ? new Date() : null,
-      });
+      }, actor.userId);
 
       await this.audit.record({
         actorId: actor.userId,
@@ -240,7 +240,7 @@ export class WorkflowScheduleService extends BaseService {
   async remove(actor: WorkflowScheduleActor, id: string, orgId?: string) {
     const { schedule } = await this.requireScheduleContext(actor, id, orgId);
     await this.temporal.deleteSchedule(schedule.scheduleId);
-    const removed = await this.schedules.markDeleted(schedule.id);
+    const removed = await this.schedules.markDeleted(schedule.id, actor.userId);
     await this.auditScheduleStatus(actor.userId, schedule.id, "workflowSchedule.delete", schedule.status, removed.status);
     return removed;
   }

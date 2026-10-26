@@ -219,7 +219,7 @@ describe("IntegrationService", () => {
     expect(connections.updateTestResult).toHaveBeenCalledWith("conn-1", row.credentialFingerprint, expect.objectContaining({
       status: IntegrationConnectionStatus.ACTIVE,
       lastTestStatus: IntegrationTestStatus.SUCCEEDED,
-    }));
+    }), "user-1");
     expect(JSON.stringify(audit.record.mock.calls[0][0])).not.toContain("secret-token");
   });
 
@@ -261,7 +261,7 @@ describe("IntegrationService", () => {
 
     expect(connections.update).toHaveBeenCalledWith("conn-1", expect.objectContaining({
       status: IntegrationConnectionStatus.DISABLED,
-    }));
+    }), "user-1");
   });
 
   it("discards a test result when credentials rotated during the test", async () => {

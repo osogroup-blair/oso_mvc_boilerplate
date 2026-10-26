@@ -80,3 +80,11 @@ Note the `.js` extension on the import — see SKILL-conventions.
 
 
 October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.
+
+
+## October 26 audit remediation contract
+
+The audit-regression suites exercise real route guards, service denial, safe DTOs, raster validation, local/cloud headers and owned SQL rollback/replay/owner races. Mock ActorAccessService explicitly when a unit test invokes a protected command; never bypass the unit database guard to satisfy new authorization. tests/acceptance/full-browser.mjs includes the audit attack cases and configured upload-prefix checks. Use the owned runner, never an existing application database or browser profile.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

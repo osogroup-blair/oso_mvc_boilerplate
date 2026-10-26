@@ -677,3 +677,10 @@ above are not evidence that the current release is production-accepted.
 
 
 October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.
+
+
+## October 26 security boundaries
+
+User-directory reads are authenticated and permission-gated; account projections exclude credentials. Auth-only credential queries are separate, new accounts require explicit passwords, and public registration never falls back to a privileged role. Protected admin sections require admin:access and their own permission. Domain services check current actors, project ownership, task parents and organization membership; a role name or a hidden organization ID is insufficient.
+
+BaseModel.mutate is the model-owned state/evidence transaction and optional command-receipt primitive. Services pass stable operation identities; no transaction client crosses layers. Metadata fingerprints are keyed and no raw request/credential content enters audit. Existing workflow/private-file journals keep their own guarantees. Public bytes are validated/re-encoded separately from private assets and delivered with restrictive headers, while executable templates use CSP nonces and explicit external UI handlers. Read docs/blueprint/MUTATION-EVIDENCE-MATRIX.md for the precise external-effect and replay boundaries.

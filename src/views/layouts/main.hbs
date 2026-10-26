@@ -115,7 +115,7 @@
 
 {{#unless hideNav}}
   {{!-- Mobile overlay --}}
-  <div id="sidebar-overlay" onclick="closeSidebar()"></div>
+  <div id="sidebar-overlay" data-sidebar="close"></div>
 
   <div class="admin-shell">
 
@@ -127,7 +127,7 @@
 
       {{!-- Top bar: hamburger (mobile) + breadcrumb --}}
       <header class="admin-topbar">
-        <button class="sidebar-hamburger" onclick="openSidebar()" aria-label="Open navigation">
+        <button class="sidebar-hamburger" data-sidebar="open" aria-label="Open navigation">
           <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
           </svg>
@@ -135,7 +135,7 @@
 
         {{!-- Breadcrumb --}}
         <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.875rem;">
-          <a href="/admin" style="font-weight:500;color:#6b7280;text-decoration:none;" onmouseover="this.style.color='#1f2937'" onmouseout="this.style.color='#6b7280'">Admin</a>
+          <a href="/admin" style="font-weight:500;color:#6b7280;text-decoration:none;">Admin</a>
           {{#if title}}
             <svg width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="#d1d5db" stroke-width="2">
               <path stroke-linecap="round" stroke-linejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
@@ -160,7 +160,7 @@
 {{/unless}}
 
 <script src="/js/admin.js"></script>
-<script>
+<script nonce="{{@root.cspNonce}}">
   function openSidebar() {
     document.getElementById('admin-sidebar').classList.add('open');
     document.getElementById('sidebar-overlay').classList.add('active');
@@ -173,5 +173,6 @@
     if (e.key === 'Escape') closeSidebar();
   });
 </script>
+<script src="/js/ui-actions.js" defer></script>
 </body>
 </html>

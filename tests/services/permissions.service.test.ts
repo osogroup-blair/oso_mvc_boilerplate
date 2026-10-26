@@ -22,7 +22,7 @@ vi.mock("../../src/services/audit.service.js", () => ({
 const makeService = () => {
   const model = new RoleModel() as any;
   const auditMock = { record: vi.fn() } as any;
-  return { service: new PermissionsService(model, auditMock), model };
+  return { service: new PermissionsService(model, auditMock, { require: vi.fn() } as any), model };
 };
 
 describe("PermissionsService", () => {
@@ -108,6 +108,6 @@ describe("PermissionsService", () => {
 
     expect(model.update).toHaveBeenCalledWith("r1", {
       permissions: ["page:read"],
-    });
+    }, undefined, expect.objectContaining({ operationId: expect.any(String) }));
   });
 });

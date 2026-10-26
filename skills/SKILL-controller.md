@@ -55,3 +55,11 @@ queries. Pre-fetch anything the view needs (e.g. relation options) here.
 ## Reference implementations
 - REST: `src/controllers/user.controller.ts`
 - Server-rendered + schema-driven: `src/controllers/admin.controller.ts`
+
+
+## October 26 audit remediation contract
+
+Use bounded recordId validation for record parameters, and UUID validation for operation IDs. Keep Idempotency-Key/header or hidden form identity stable across retries. Account creation requires an explicit password; validation rendering must omit passwords/secrets. Login destinations pass safeRedirect. Service/model output must already use explicit safe DTO/projection contracts.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

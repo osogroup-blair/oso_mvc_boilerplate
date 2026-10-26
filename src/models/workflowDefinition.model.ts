@@ -99,8 +99,8 @@ export class WorkflowDefinitionModel extends BaseModel {
     });
   }
 
-  upsertCodeFacts(data: Prisma.WorkflowDefinitionUncheckedCreateInput) {
-    return this.db.workflowDefinition.upsert({
+  upsertCodeFacts(data: Prisma.WorkflowDefinitionUncheckedCreateInput, actorId?: string) {
+    return this.mutate("workflowDefinition.upsertCodeFacts", "WorkflowDefinition", actorId, tx => tx.workflowDefinition.upsert({
       where: { key: data.key },
       update: {
         slug: data.slug,
@@ -114,27 +114,28 @@ export class WorkflowDefinitionModel extends BaseModel {
         deletedAt: null,
       },
       create: data,
-    });
+    }));
   }
 
-  update(id: string, data: Prisma.WorkflowDefinitionUpdateInput) {
-    return this.db.workflowDefinition.update({ where: { id }, data });
+  update(id: string, data: Prisma.WorkflowDefinitionUpdateInput, actorId?: string) {
+    return this.mutate("workflowDefinition.update", "WorkflowDefinition", actorId, tx => tx.workflowDefinition.update({ where: { id }, data }), id);
   }
 
-  softDelete(id: string) {
-    return this.db.workflowDefinition.update({
+  softDelete(id: string, actorId?: string) {
+    return this.mutate("workflowDefinition.softDelete", "WorkflowDefinition", actorId, tx => tx.workflowDefinition.update({
       where: { id },
       data: { deletedAt: new Date() },
-    });
+    }), id);
   }
 
   async syncIntegrationRequirements(
     workflowDefinitionId: string,
     requirements: Prisma.WorkflowIntegrationRequirementUncheckedCreateInput[]
   ) {
+    await this.mutate("workflowDefinition.requirements", "WorkflowDefinition", undefined, async tx => {
     const keys = requirements.map((requirement) => requirement.key);
 
-    await this.db.workflowIntegrationRequirement.updateMany({
+    await tx.workflowIntegrationRequirement.updateMany({
       where: {
         workflowDefinitionId,
         key: { notIn: keys.length ? keys : [""] },
@@ -144,7 +145,7 @@ export class WorkflowDefinitionModel extends BaseModel {
     });
 
     for (const requirement of requirements) {
-      await this.db.workflowIntegrationRequirement.upsert({
+      await tx.workflowIntegrationRequirement.upsert({
         where: {
           workflowDefinitionId_key: {
             workflowDefinitionId,
@@ -162,13 +163,15 @@ export class WorkflowDefinitionModel extends BaseModel {
         create: requirement,
       });
     }
+      return { id: workflowDefinitionId };
+    }, workflowDefinitionId);
   }
 
   async replaceRolePolicy(
     workflowDefinitionId: string,
-    entries: Array<{ roleId: string; capability: WorkflowCapability }>
+    entries: Array<{ roleId: string; capability: WorkflowCapability }>, actorId?: string
   ) {
-    await this.db.$transaction(async (tx) => {
+    await this.mutate("workflowDefinition.role_policy", "WorkflowDefinition", actorId, async tx => {
       await tx.workflowDefinitionRole.updateMany({
         where: { workflowDefinitionId, deletedAt: null },
         data: { deletedAt: new Date() },
@@ -187,7 +190,8 @@ export class WorkflowDefinitionModel extends BaseModel {
           create: { workflowDefinitionId, roleId: entry.roleId, capability: entry.capability },
         });
       }
-    });
+      return { id: workflowDefinitionId };
+    }, workflowDefinitionId);
   }
 }
 

@@ -3,7 +3,16 @@ import { settingService, SETTING_KEYS } from "../../services/setting.service.js"
 import { pageService } from "../../services/page.service.js";
 import { z } from "zod";
 
-const updateSettingsSchema = z.object({
+const additionalSettings = Object.fromEntries(Object.entries(SETTING_KEYS).map(([key, meta]) => {
+  let field: z.ZodTypeAny = z.string().max(20000);
+  if (meta.type === "number") field = z.coerce.number().finite().int().nonnegative();
+  if (meta.type === "boolean") field = z.preprocess(value => value === "true" || value === "on" || value === true, z.boolean());
+  if (meta.type === "url") field = z.string().url().or(z.literal(""));
+  if (meta.type === "email") field = z.string().email();
+  if ("options" in meta) field = z.string().refine(value => (meta.options as readonly string[]).includes(value), "Unsupported option");
+  return [key, field];
+}));
+const updateSettingsSchema = z.object(additionalSettings).extend({
   SITE_NAME: z.string().min(1, "Site name is required"),
   SITE_DESCRIPTION: z.string().optional().default(""),
   HOME_PAGE_SLUG: z.string().min(1, "Home page slug is required"),
@@ -18,7 +27,7 @@ const updateSettingsSchema = z.object({
   FOOTER_TEXT: z.string().optional().default(""),
   ACCENT_COLOR: z.string().regex(/^#[0-9a-fA-F]{6}$/, "Must be a valid hex color code"),
   LOGO_URL: z.string().url("Invalid URL").or(z.literal("")),
-});
+}).partial();
 
 export const settingAdminController = {
   async index(_req: Request, res: Response, next: NextFunction) {
@@ -73,11 +82,10 @@ export const settingAdminController = {
     try {
       // Form submits booleans as checkboxes, if not checked it won't be sent.
       // Pre-assign MAINTENANCE_MODE to false if not sent.
-      const body = {
-        MAINTENANCE_MODE: "false",
-        ...req.body
-      };
-      
+      const body = { ...req.body };
+      if (body._fullSettings === "true") for (const [key, meta] of Object.entries(SETTING_KEYS)) {
+        if (meta.type === "boolean" && body[key] === undefined) body[key] = "false";
+      }
       const data = updateSettingsSchema.parse(body);
 
       // Convert all values back to string format for storage
@@ -86,7 +94,7 @@ export const settingAdminController = {
         entries[key] = String(value);
       }
       
-      await settingService.setMany(entries, req.user?.id);
+      await settingService.setMany(entries, req.user?.id, z.string().uuid().optional().parse(req.body._operationId));
       
       res.redirect("/admin/settings?success=true");
     } catch (error) {

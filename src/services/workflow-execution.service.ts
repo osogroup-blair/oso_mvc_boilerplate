@@ -204,7 +204,7 @@ export class WorkflowExecutionService extends BaseService {
     }
 
     await this.temporal.cancelWorkflow(execution.workflowId, execution.runId ?? undefined);
-    const updated = await this.executions.update(execution.id, { stateSummary: { cancelRequested: true } });
+    const updated = await this.executions.update(execution.id, { stateSummary: { cancelRequested: true } }, actor.userId);
 
     await this.audit.record({
       actorId: actor.userId,

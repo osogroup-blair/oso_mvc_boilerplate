@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { Request, Response, NextFunction } from "express";
 import { sessionService } from "../../services/session.service.js";
 import { listQuerySchema, toListParams, buildMeta } from "../../lib/query.js";
@@ -30,7 +31,7 @@ export class SessionAdminController {
     try {
       const { id } = req.params;
       const actorId = req.user?.id;
-      await sessionService.revoke(id, actorId);
+      await sessionService.revoke(id, actorId, z.string().uuid().optional().parse(req.body._operationId));
 
       res.redirect("/admin/sessions?revoked=1");
     } catch (err) {

@@ -24,7 +24,7 @@ describe("TaskService", () => {
   beforeEach(() => {
     model   = makeModel();
     audit   = makeAudit();
-    service = new TaskService(model as any, audit as any);
+    service = new TaskService(model as any, audit as any, { authorize: vi.fn().mockResolvedValue({ ownerId: "user-1" }) } as any, { findById: async () => ({ id: "tag-1" }) } as any);
   });
 
   // ── getById ─────────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ describe("TaskService", () => {
   // ── create ──────────────────────────────────────────────────────────────────
   it("create returns the new task and calls audit.record", async () => {
     const input   = { title: "Fix bug", project: { connect: { id: "p1" } } } as any;
-    const created = { id: "t1", title: "Fix bug" };
+    const created = { id: "t1", projectId: "p1", title: "Fix bug" };
     model.create.mockResolvedValue(created);
 
     const result = await service.create(input, "user-1");
@@ -49,14 +49,14 @@ describe("TaskService", () => {
 
   // ── addTag (M2M) ────────────────────────────────────────────────────────────
   it("addTag calls model.addTag and audits tag_add action", async () => {
-    const task = { id: "t1", title: "Fix bug" };
+    const task = { id: "t1", projectId: "p1", title: "Fix bug" };
     const join = { taskId: "t1", tagId: "tag-1" };
     model.findById.mockResolvedValue(task);
     model.addTag.mockResolvedValue(join);
 
     const result = await service.addTag("t1", "tag-1", "user-1");
 
-    expect(model.addTag).toHaveBeenCalledWith("t1", "tag-1");
+    expect(model.addTag).toHaveBeenCalledWith("t1", "tag-1", "user-1", "user-1", expect.objectContaining({ operationId: expect.any(String) }));
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({
         action:     "task.tag_add",
@@ -75,13 +75,13 @@ describe("TaskService", () => {
 
   // ── removeTag (M2M) ─────────────────────────────────────────────────────────
   it("removeTag calls model.removeTag and audits tag_remove action", async () => {
-    const task = { id: "t1", title: "Fix bug" };
+    const task = { id: "t1", projectId: "p1", title: "Fix bug" };
     model.findById.mockResolvedValue(task);
     model.removeTag.mockResolvedValue({ count: 1 });
 
     await service.removeTag("t1", "tag-1", "user-1");
 
-    expect(model.removeTag).toHaveBeenCalledWith("t1", "tag-1");
+    expect(model.removeTag).toHaveBeenCalledWith("t1", "tag-1", "user-1", "user-1", expect.objectContaining({ operationId: expect.any(String) }));
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "task.tag_remove" })
     );
@@ -89,14 +89,14 @@ describe("TaskService", () => {
 
   // ── remove ──────────────────────────────────────────────────────────────────
   it("remove soft-deletes the task and records an audit entry", async () => {
-    const task    = { id: "t1", title: "Fix bug" };
+    const task    = { id: "t1", projectId: "p1", title: "Fix bug" };
     const deleted = { ...task, deletedAt: new Date() };
     model.findById.mockResolvedValue(task);
     model.softDelete.mockResolvedValue(deleted);
 
     await service.remove("t1", "user-1");
 
-    expect(model.softDelete).toHaveBeenCalledWith("t1");
+    expect(model.softDelete).toHaveBeenCalledWith("t1", "user-1", "p1", expect.objectContaining({ operationId: expect.any(String) }), "user-1");
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "task.delete" })
     );

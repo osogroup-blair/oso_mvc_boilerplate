@@ -1,3 +1,4 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
@@ -18,9 +19,9 @@ export class NavigationItemModel extends BaseModel {
   }
 
   findById(id: string) { return this.db.navigationItem.findFirst({ where: { id, ...this.notDeleted } }); }
-  create(data: Prisma.NavigationItemUncheckedCreateInput) { return this.db.navigationItem.create({ data }); }
-  update(id: string, data: Prisma.NavigationItemUncheckedUpdateInput) { return this.db.navigationItem.update({ where: { id }, data }); }
-  softDelete(id: string) { return this.db.navigationItem.update({ where: { id }, data: { deletedAt: new Date() } }); }
+  create(data: Prisma.NavigationItemUncheckedCreateInput, actorId?: string, command?: CommandMetadata) { return this.mutate("navigationItem.create", "NavigationItem", actorId, tx => tx.navigationItem.create({ data }), undefined, command, (tx, resultId) => tx.navigationItem.findUniqueOrThrow({ where: { id: resultId } })); }
+  update(id: string, data: Prisma.NavigationItemUncheckedUpdateInput, actorId?: string, command?: CommandMetadata) { return this.mutate("navigationItem.update", "NavigationItem", actorId, tx => tx.navigationItem.update({ where: { id }, data }), id, command, (tx, resultId) => tx.navigationItem.findUniqueOrThrow({ where: { id: resultId } })); }
+  softDelete(id: string, actorId?: string, command?: CommandMetadata) { return this.mutate("navigationItem.softDelete", "NavigationItem", actorId, tx => tx.navigationItem.update({ where: { id }, data: { deletedAt: new Date() } }), id, command, (tx, resultId) => tx.navigationItem.findUniqueOrThrow({ where: { id: resultId } })); }
   
   // Custom method to get the full tree for rendering
   async getTree() {

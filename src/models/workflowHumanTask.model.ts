@@ -87,7 +87,7 @@ export class WorkflowHumanTaskModel extends BaseModel {
   }
 
   createWithRoles(data: Prisma.WorkflowHumanTaskUncheckedCreateInput, roleIds: string[]) {
-    return this.db.$transaction(async (tx) => {
+    return this.mutate("workflowHumanTask.create", "WorkflowHumanTask", undefined, async tx => {
       const task = await tx.workflowHumanTask.create({ data });
       for (const roleId of roleIds) {
         await tx.workflowHumanTaskRole.upsert({
@@ -103,16 +103,16 @@ export class WorkflowHumanTaskModel extends BaseModel {
     });
   }
 
-  update(id: string, data: Prisma.WorkflowHumanTaskUpdateInput) {
-    return this.db.workflowHumanTask.update({
+  update(id: string, data: Prisma.WorkflowHumanTaskUpdateInput, actorId?: string) {
+    return this.mutate("workflowHumanTask.update", "WorkflowHumanTask", actorId, tx => tx.workflowHumanTask.update({
       where: { id },
       data,
       include: this.detailInclude(),
-    });
+    }), id);
   }
 
-  createToken(data: Prisma.WorkflowTaskTokenUncheckedCreateInput) {
-    return this.db.workflowTaskToken.create({ data });
+  createToken(data: Prisma.WorkflowTaskTokenUncheckedCreateInput, actorId?: string) {
+    return this.mutate("workflowTaskToken.createToken", "WorkflowTaskToken", actorId, tx => tx.workflowTaskToken.create({ data }));
   }
 
   findTokenByHash(tokenHash: string) {
@@ -126,11 +126,11 @@ export class WorkflowHumanTaskModel extends BaseModel {
     });
   }
 
-  consumeToken(id: string) {
-    return this.db.workflowTaskToken.update({
+  consumeToken(id: string, actorId?: string) {
+    return this.mutate("workflowTaskToken.consumeToken", "WorkflowTaskToken", actorId, tx => tx.workflowTaskToken.update({
       where: { id },
       data: { consumedAt: new Date() },
-    });
+    }), id);
   }
 
   findReceiptByIdempotencyKey(taskId: string, idempotencyKey: string) {
@@ -151,7 +151,7 @@ export class WorkflowHumanTaskModel extends BaseModel {
     requestHash: string;
     result?: Prisma.InputJsonValue;
   }) {
-    return this.db.$transaction(async (tx) => {
+    return this.mutate("workflowHumanTask.reserve_action", "WorkflowHumanTask", data.actorUserId, async tx => {
       const receipt = await tx.workflowActionReceipt.create({ data: { ...data, status: WorkflowActionReceiptStatus.RECEIVED } });
       // One logical action owns the task across different browser idempotency keys.
       const claimed = await tx.workflowHumanTask.updateMany({
@@ -202,16 +202,16 @@ export class WorkflowHumanTaskModel extends BaseModel {
     });
   }
 
-  finalizeReceipt(id: string, data: { status: WorkflowActionReceiptStatus; result?: Prisma.InputJsonValue; error?: Prisma.InputJsonValue }) {
-    return this.db.workflowActionReceipt.update({
+  finalizeReceipt(id: string, data: { status: WorkflowActionReceiptStatus; result?: Prisma.InputJsonValue; error?: Prisma.InputJsonValue }, actorId?: string) {
+    return this.mutate("workflowActionReceipt.finalizeReceipt", "WorkflowActionReceipt", actorId, tx => tx.workflowActionReceipt.update({
       where: { id },
       data,
-    });
+    }), id);
   }
 
-  cancelOpenWorkflowTasks(input: {orgId:string;workflowId:string;runId:string}) {
-    return this.db.workflowHumanTask.updateMany({where:{orgId:input.orgId,workflowId:input.workflowId,runId:input.runId,status:WorkflowHumanTaskStatus.OPEN,deletedAt:null},
-      data:{status:WorkflowHumanTaskStatus.CANCELED,closedAt:new Date()}});
+  cancelOpenWorkflowTasks(input: {orgId:string;workflowId:string;runId:string}, actorId?: string) {
+    return this.mutate("workflowHumanTask.cancelOpenWorkflowTasks", "WorkflowHumanTask", actorId, tx => tx.workflowHumanTask.updateMany({where:{orgId:input.orgId,workflowId:input.workflowId,runId:input.runId,status:WorkflowHumanTaskStatus.OPEN,deletedAt:null},
+      data:{status:WorkflowHumanTaskStatus.CANCELED,closedAt:new Date()}}));
   }
   isActiveMember(userId:string,orgId:string) { return this.db.orgMember.findFirst({where:{userId,orgId,deletedAt:null,user:{isActive:true,deletedAt:null},org:{deletedAt:null}}}); }
 

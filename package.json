@@ -4,7 +4,7 @@
   "description": "Schema-driven MVC boilerplate: Node + TypeScript + Express + Prisma + Handlebars",
   "type": "module",
   "engines": {
-    "node": ">=20"
+    "node": ">=20.9.0"
   },
   "scripts": {
     "setup": "bash bin/setup.sh",
@@ -56,6 +56,7 @@
     "express": "^4.21.1",
     "express-handlebars": "^8.0.1",
     "express-rate-limit": "^7.4.1",
+    "file-type": "^21.3.4",
     "helmet": "^8.0.0",
     "ioredis": "^6.0.0",
     "multer": "^2.2.0",
@@ -63,6 +64,7 @@
     "pino": "^9.5.0",
     "pino-http": "^10.3.0",
     "sanitize-html": "^2.13.1",
+    "sharp": "^0.35.5",
     "uuid": "^11.0.3",
     "zod": "^3.23.8"
   },

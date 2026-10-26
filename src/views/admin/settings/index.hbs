@@ -26,6 +26,8 @@
 
   <form action="/admin/settings" method="POST" class="space-y-6">
   <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+  <input type="hidden" name="_fullSettings" value="true" />
+  <input type="hidden" name="_operationId" value="{{@root.operationId}}" />
     {{#each sections}}
       <div class="bg-white shadow-sm ring-1 ring-gray-900/5 sm:rounded-xl">
         <div class="border-b border-gray-100 px-4 py-4 sm:px-8">

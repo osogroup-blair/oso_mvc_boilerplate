@@ -1,3 +1,4 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 // Page data access. Soft-delete aware, like every model.
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
@@ -61,29 +62,24 @@ export class PageModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.PageCreateInput) {
-    return this.db.page.create({ data });
+  create(data: Prisma.PageCreateInput, actorId?: string, command?: CommandMetadata, roleIds?: string[]) {
+    return this.mutate("page.create", "Page", actorId, tx => tx.page.create({ data: { ...data, ...(roleIds ? { allowedRoles: { create: roleIds.map(roleId => ({ roleId })) } } : {}) } }), undefined, command, (tx, resultId) => tx.page.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  update(id: string, data: Prisma.PageUpdateInput) {
-    return this.db.page.update({ where: { id }, data });
+  update(id: string, data: Prisma.PageUpdateInput, actorId?: string, command?: CommandMetadata, roleIds?: string[]) {
+    return this.mutate("page.update", "Page", actorId, tx => tx.page.update({ where: { id, deletedAt: null }, data: { ...data, ...(roleIds !== undefined ? { allowedRoles: { deleteMany: {}, create: roleIds.map(roleId => ({ roleId })) } } : {}) } }), id, command, (tx, resultId) => tx.page.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  softDelete(id: string) {
-    return this.db.page.update({ where: { id }, data: { deletedAt: new Date() } });
+  softDelete(id: string, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("page.softDelete", "Page", actorId, tx => tx.page.update({ where: { id }, data: { deletedAt: new Date() } }), id, command, (tx, resultId) => tx.page.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  // Atomically replace the allowed roles for a page (delete then create).
-  async setAllowedRoles(pageId: string, roleIds: string[]): Promise<void> {
-    await this.db.pageRole.deleteMany({ where: { pageId } });
-    if (roleIds.length > 0) {
-      await this.db.pageRole.createMany({
-        data: roleIds.map((roleId) => ({ pageId, roleId })),
-        skipDuplicates: true,
-      });
-    }
+  async setAllowedRoles(pageId: string, roleIds: string[], actorId?: string): Promise<void> {
+    await this.mutate("page.roles", "Page", actorId, async tx => {
+      await tx.pageRole.deleteMany({ where: { pageId } });
+      if (roleIds.length) await tx.pageRole.createMany({ data: roleIds.map(roleId => ({ pageId, roleId })), skipDuplicates: true });
+      return { id: pageId };
+    }, pageId);
   }
 }
-
 export const pageModel = new PageModel();
-

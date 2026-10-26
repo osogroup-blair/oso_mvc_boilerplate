@@ -110,3 +110,11 @@ uses metadata only. Tenant admin adapters must resolve access before record or
 option reads and delegate CAS/receipt semantics to resource services/models.
 Existing self-hosted Temporal executions require reviewed prior histories
 before Workflow command changes; an empty corpus is a blocked release gate.
+
+
+## October 26 audit remediation contract
+
+Register each CRUD permission in lib/permission-definitions.ts; permission-registration tests cover every schema/action and fresh-admin defaults. Do not rerun the dev seed to grant deployed roles. Legacy resource adapters now forward operation IDs as create/remove third arguments and update fourth arguments. Domain services validate and authorize writes. Relation options, model counts and sidebar sections require their own read permissions. Preserve safe operation identity and omit passwords on validation re-render.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

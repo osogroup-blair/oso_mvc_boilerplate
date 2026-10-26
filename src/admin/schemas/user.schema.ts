@@ -13,7 +13,7 @@ export const userSchema: AdminSchema = {
     { key: "name", type: "text", required: true },
     { key: "email", type: "email", required: true },
     { key: "roleId", label: "Role", type: "relation", relation: { model: "role", labelField: "name" }, required: true },
-    { key: "password", type: "password", required: false, help: "Leave blank to keep current password." },
+    { key: "password", type: "password", required: false, help: "Required for new accounts (8+ characters). Leave blank on edit to keep the current password." },
     { key: "isActive", type: "boolean" },
     { key: "bio", type: "textarea", help: "Short biography, plain text." },
     {
@@ -29,6 +29,7 @@ export const userSchema: AdminSchema = {
     { key: "tags", type: "array", itemType: "text", help: "Free-form labels." },
     {
       key: "posts",
+      readonly: true,
       type: "array",
       itemType: "object",
       label: "Posts",

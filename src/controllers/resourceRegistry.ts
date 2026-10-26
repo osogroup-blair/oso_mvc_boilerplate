@@ -21,9 +21,9 @@ const userResource: AdminResource = {
   listAll: () => userService.list({ skip: 0, take: 1000, orderBy: { name: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => userService.count(s),
   getById: (id) => userService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => userService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => userService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => userService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => userService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => userService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => userService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const pageResource: AdminResource = {
@@ -31,9 +31,9 @@ const pageResource: AdminResource = {
   listAll: () => pageService.list({ skip: 0, take: 1000, orderBy: { title: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => pageService.count(s),
   getById: (id) => pageService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => pageService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => pageService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => pageService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => pageService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => pageService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => pageService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const navigationItemResource: AdminResource = {
@@ -41,9 +41,9 @@ const navigationItemResource: AdminResource = {
   listAll: () => navigationItemService.list({ skip: 0, take: 1000, orderBy: { label: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => navigationItemService.count(s),
   getById: (id) => navigationItemService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => navigationItemService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => navigationItemService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => navigationItemService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => navigationItemService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => navigationItemService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => navigationItemService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const routeResource: AdminResource = {
@@ -51,9 +51,9 @@ const routeResource: AdminResource = {
   listAll: () => routeService.list({ skip: 0, take: 1000, orderBy: { pattern: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => routeService.count(s),
   getById: (id) => routeService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => routeService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => routeService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => routeService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => routeService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => routeService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => routeService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const roleResource: AdminResource = {
@@ -61,9 +61,9 @@ const roleResource: AdminResource = {
   listAll: () => roleService.list({ skip: 0, take: 1000, orderBy: { name: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => roleService.count(s),
   getById: (id) => roleService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => roleService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => roleService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => roleService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => roleService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => roleService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => roleService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const projectResource: AdminResource = {
@@ -71,9 +71,9 @@ const projectResource: AdminResource = {
   listAll: () => projectService.list({ skip: 0, take: 1000, orderBy: { name: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => projectService.count(s),
   getById: (id) => projectService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => projectService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => projectService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => projectService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => projectService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => projectService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => projectService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const taskResource: AdminResource = {
@@ -81,9 +81,9 @@ const taskResource: AdminResource = {
   listAll: () => taskService.list({ skip: 0, take: 1000, orderBy: { title: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => taskService.count(s),
   getById: (id) => taskService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => taskService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => taskService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => taskService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => taskService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => taskService.update(id, d as never, actor, undefined, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => taskService.remove(id, actor, undefined, operationId) as Promise<Record<string, unknown>>,
 };
 
 const tagResource: AdminResource = {
@@ -91,9 +91,9 @@ const tagResource: AdminResource = {
   listAll: () => tagService.list({ skip: 0, take: 1000, orderBy: { name: "asc" } }) as Promise<Record<string, unknown>[]>,
   count: (s) => tagService.count(s),
   getById: (id) => tagService.getById(id) as Promise<Record<string, unknown>>,
-  create: (d, actor) => tagService.create(d as never, actor) as Promise<Record<string, unknown>>,
-  update: (id, d, actor) => tagService.update(id, d as never, actor) as Promise<Record<string, unknown>>,
-  remove: (id, actor) => tagService.remove(id, actor) as Promise<Record<string, unknown>>,
+  create: (d, actor, operationId) => tagService.create(d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  update: (id, d, actor, operationId) => tagService.update(id, d as never, actor, operationId) as Promise<Record<string, unknown>>,
+  remove: (id, actor, operationId) => tagService.remove(id, actor, operationId) as Promise<Record<string, unknown>>,
 };
 
 const resources = new Map<string, AdminResource>();

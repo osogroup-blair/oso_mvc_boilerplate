@@ -397,3 +397,8 @@ As a portfolio and reference implementation, this project showcases:
 
 
 October 20 local completion: recoverable starts, fenced effects, Update receipts, patch-gated Workflow modules, payload protection and owned full-stack acceptance are now implemented. See `docs/blueprint/EXTENSION-CONTRACTS.md` and `docs/blueprint/LOCAL-OPERATIONS.md` for current contracts and `docs/blueprint/EXECUTION-REPORT-2026-10-20.md` for evidence. Run `npm run test:local:all` after provisioning the explicit owned fixture dependencies. Existing production execution compatibility is still gated on the actual deployed history inventory.
+
+
+### Security contracts and local verification
+
+Use Node.js 20.9 or later (the image decoder's minimum; CI and the owned runtime use Node 24). The October 26 [audit implementation report](docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md) records account/authorization/upload fixes and [mutation evidence guarantees](docs/blueprint/MUTATION-EVIDENCE-MATRIX.md). New resources must adopt these service policies and safe output projections in addition to the layer conventions. Existing deployed roles require reviewed explicit grants; the development seed is not a production migration. Local verification does not establish deployed Temporal compatibility, remote object/CDN policy, production infrastructure acceptance or a clean dependency audit.

@@ -64,8 +64,8 @@ export class WorkflowIntegrationBindingModel extends BaseModel {
     requirementKey: string;
     connectionId: string;
     isEnabled: boolean;
-  }) {
-    return this.db.workflowIntegrationBinding.upsert({
+  }, actorId?: string) {
+    return this.mutate("workflowIntegrationBinding.upsert", "WorkflowIntegrationBinding", actorId, tx => tx.workflowIntegrationBinding.upsert({
       where: {
         orgId_workflowDefinitionId_requirementKey: {
           orgId: data.orgId,
@@ -80,23 +80,23 @@ export class WorkflowIntegrationBindingModel extends BaseModel {
       },
       create: data,
       include: safeBindingInclude,
-    });
+    }));
   }
 
-  update(id: string, data: Prisma.WorkflowIntegrationBindingUpdateInput) {
-    return this.db.workflowIntegrationBinding.update({
+  update(id: string, data: Prisma.WorkflowIntegrationBindingUpdateInput, actorId?: string) {
+    return this.mutate("workflowIntegrationBinding.update", "WorkflowIntegrationBinding", actorId, tx => tx.workflowIntegrationBinding.update({
       where: { id },
       data,
       include: safeBindingInclude,
-    });
+    }), id);
   }
 
-  softDelete(id: string) {
-    return this.db.workflowIntegrationBinding.update({
+  softDelete(id: string, actorId?: string) {
+    return this.mutate("workflowIntegrationBinding.softDelete", "WorkflowIntegrationBinding", actorId, tx => tx.workflowIntegrationBinding.update({
       where: { id },
       data: { deletedAt: new Date(), isEnabled: false },
       include: safeBindingInclude,
-    });
+    }), id);
   }
 }
 

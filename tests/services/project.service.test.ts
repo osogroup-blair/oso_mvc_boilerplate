@@ -24,7 +24,7 @@ describe("ProjectService", () => {
   beforeEach(() => {
     model   = makeModel();
     audit   = makeAudit();
-    service = new ProjectService(model as any, audit as any);
+    service = new ProjectService(model as any, audit as any, { actor: async () => ({ id: "user-1" }), can: () => false } as any);
   });
 
   // ── getById ─────────────────────────────────────────────────────────────────
@@ -34,7 +34,7 @@ describe("ProjectService", () => {
   });
 
   it("getById returns the project when found", async () => {
-    const project = { id: "p1", name: "Alpha" };
+    const project = { id: "p1", ownerId: "user-1", name: "Alpha" };
     model.findById.mockResolvedValue(project);
     await expect(service.getById("p1")).resolves.toEqual(project);
   });
@@ -55,8 +55,8 @@ describe("ProjectService", () => {
 
   // ── update ──────────────────────────────────────────────────────────────────
   it("update calls model.update and audits the change", async () => {
-    const before  = { id: "p1", name: "Old" };
-    const updated = { id: "p1", name: "New" };
+    const before  = { id: "p1", ownerId: "user-1", name: "Old" };
+    const updated = { id: "p1", ownerId: "user-1", name: "New" };
     model.findById.mockResolvedValue(before);
     model.update.mockResolvedValue(updated);
 
@@ -75,14 +75,14 @@ describe("ProjectService", () => {
 
   // ── remove ──────────────────────────────────────────────────────────────────
   it("remove calls model.softDelete and audits the deletion", async () => {
-    const project = { id: "p1", name: "Alpha" };
+    const project = { id: "p1", ownerId: "user-1", name: "Alpha" };
     const deleted = { ...project, deletedAt: new Date() };
     model.findById.mockResolvedValue(project);
     model.softDelete.mockResolvedValue(deleted);
 
     await service.remove("p1", "user-1");
 
-    expect(model.softDelete).toHaveBeenCalledWith("p1");
+    expect(model.softDelete).toHaveBeenCalledWith("p1", "user-1", "user-1", expect.objectContaining({ operationId: expect.any(String) }));
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "project.delete", entityId: "p1" })
     );
@@ -90,7 +90,7 @@ describe("ProjectService", () => {
 
   it("remove throws 404 when project does not exist", async () => {
     model.findById.mockResolvedValue(null);
-    await expect(service.remove("bad-id")).rejects.toMatchObject({ statusCode: 404 });
+    await expect(service.remove("bad-id", "user-1")).rejects.toMatchObject({ statusCode: 404 });
     expect(model.softDelete).not.toHaveBeenCalled();
   });
 });

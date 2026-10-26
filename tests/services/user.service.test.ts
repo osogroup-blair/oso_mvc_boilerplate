@@ -24,7 +24,7 @@ describe("UserService", () => {
     model = makeModel();
     audit = makeAudit();
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    service = new UserService(model as any, audit as any);
+    service = new UserService(model as any, audit as any, { findByName: async () => ({ id: "role" }) } as any, { require: vi.fn() } as any);
   });
 
   it("throws 404 when user not found", async () => {
@@ -34,7 +34,7 @@ describe("UserService", () => {
 
   it("writes an audit log on create", async () => {
     model.create.mockResolvedValue({ id: "u1", name: "A" });
-    await service.create({ name: "A", email: "a@x.com" } as never, "actor1");
+    await service.create({ name: "A", email: "a@x.com", password: "explicit-password" } as never, "actor1");
     expect(audit.record).toHaveBeenCalledWith(
       expect.objectContaining({ action: "user.create", actorId: "actor1" })
     );

@@ -1,3 +1,4 @@
+import { recordId } from "../lib/identifiers.js";
 // Public server-rendered controller for the Project/Task demo.
 // Demonstrates: thin controller — validates with Zod, calls ONE service,
 // builds a JSON payload, res.render(). No business logic, no DB access.
@@ -46,9 +47,9 @@ export class ProjectController {
   // GET /projects/:id — detail view (eager-loads tasks + tags)
   async show(req: Request, res: Response, next: NextFunction) {
     try {
-      const project = await projectService.getById(req.params.id);
+      const project = await projectService.getById(recordId.parse(req.params.id));
       const user    = res.locals.user;
-      const canEdit = user && (user.id === project.ownerId || user.role === "ADMIN");
+      const canEdit = await projectService.canEdit(project.id, user?.id);
 
       res.render("projects/show", {
         ...basePayload(res),
@@ -99,7 +100,7 @@ export class ProjectController {
   // GET /projects/:id/edit — pre-filled edit form (requireAuth on route)
   async editForm(req: Request, res: Response, next: NextFunction) {
     try {
-      const project = await projectService.getById(req.params.id);
+      const project = await projectService.authorize(recordId.parse(req.params.id), req.user?.id);
 
       res.render("projects/form", {
         ...basePayload(res),
@@ -115,8 +116,8 @@ export class ProjectController {
     try {
       const data = projectSchema.parse(req.body);
       const user = req.user!;
-      await projectService.update(req.params.id, data, user.id);
-      res.redirect(`/projects/${req.params.id}`);
+      await projectService.update(recordId.parse(req.params.id), data, user.id, z.string().uuid().optional().parse(req.body.operationId));
+      res.redirect(`/projects/${recordId.parse(req.params.id)}`);
     } catch (err) { next(err); }
   }
 
@@ -124,7 +125,7 @@ export class ProjectController {
   async destroy(req: Request, res: Response, next: NextFunction) {
     try {
       const user = req.user!;
-      await projectService.remove(req.params.id, user.id);
+      await projectService.remove(recordId.parse(req.params.id), user.id, z.string().uuid().optional().parse(req.body.operationId));
       res.redirect("/projects");
     } catch (err) { next(err); }
   }

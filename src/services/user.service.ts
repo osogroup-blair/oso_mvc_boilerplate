@@ -1,3 +1,6 @@
+import { commandMetadata } from "../lib/command-contracts.js";
+import { accountCreate, accountUpdate } from "../lib/account-input.js";
+import { actorAccessService } from "./actor-access.service.js";
 import { authService } from "./auth.service.js";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
@@ -5,13 +8,14 @@ import { UserModel } from "../models/user.model.js";
 import { RoleModel, roleModel } from "../models/role.model.js";
 import { auditService, AuditService } from "./audit.service.js";
 import type { ListParams } from "../lib/query.js";
-import type { Prisma } from "@prisma/client";
+
 
 export class UserService extends BaseService {
   constructor(
     private readonly model = new UserModel(),
     private readonly audit: AuditService = auditService,
-    private readonly roles: RoleModel = roleModel
+    private readonly roles: RoleModel = roleModel,
+    private readonly access = actorAccessService
   ) {
     super("UserService");
   }
@@ -30,21 +34,19 @@ export class UserService extends BaseService {
     return user;
   }
 
-  async create(data: Prisma.UserCreateInput & { role?: string; roleId?: string; password?: string }, actorId?: string) {
-    let roleId = data.roleId;
-    if (data.role && !roleId) {
-      const roleRecord = await this.roles.findByName(data.role);
-      if (!roleRecord) throw AppError.notFound(`Role "${data.role}"`);
-      roleId = roleRecord.id;
-    }
-    const { role: _, password, ...dbData } = data;
-    const passwordHash = password ? authService.hashPassword(password) : authService.hashPassword("default123");
-    
+  async create(input: unknown, actorId?: string, operationId?: string) {
+    const data = accountCreate.parse(input);
+    await this.access.require(actorId, "user:create");
+    await this.access.require(actorId, "role:update");
+    const role = data.roleId ? await this.roles.findById(data.roleId) : await this.roles.findByName(data.role ?? "USER");
+    if (!role || role.deletedAt) throw AppError.notFound("Role");
+    const { role: _role, password, roleId: _roleId, ...dbData } = data;
+    const passwordHash = authService.hashPassword(password);
     const created = await this.model.create({
       ...dbData,
-      roleId: roleId!,
+      role: { connect: { id: role.id } },
       passwordHash,
-    } as any);
+    }, actorId, commandMetadata(input, operationId));
     await this.audit.record({
       actorId,
       action: "user.create",
@@ -55,13 +57,17 @@ export class UserService extends BaseService {
     return created;
   }
 
-  async update(id: string, data: Prisma.UserUpdateInput & { password?: string }, actorId?: string) {
+  async update(id: string, input: unknown, actorId?: string, operationId?: string) {
+    const data = accountUpdate.parse(input);
+    await this.access.require(actorId, "user:update");
+    if (data.roleId !== undefined || data.role !== undefined) await this.access.require(actorId, "role:update");
     const before = await this.getById(id);
-    const { password, ...dbData } = data;
-    if (password) {
-      (dbData as any).passwordHash = authService.hashPassword(password);
-    }
-    const updated = await this.model.update(id, dbData as any);
+    const { password, roleId, role: roleName, ...fields } = data;
+    const role = roleId ? await this.roles.findById(roleId) : roleName ? await this.roles.findByName(roleName) : undefined;
+    if ((roleId || roleName) && (!role || role.deletedAt)) throw AppError.notFound("Role");
+    const dbData = { ...fields, ...(role ? { role: { connect: { id: role.id } } } : {}),
+      ...(password ? { passwordHash: authService.hashPassword(password) } : {}) };
+    const updated = await this.model.update(id, dbData, actorId, commandMetadata(input, operationId));
     await this.audit.record({
       actorId,
       action: "user.update",
@@ -72,9 +78,10 @@ export class UserService extends BaseService {
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
+    await this.access.require(actorId, "user:delete");
     await this.getById(id); // 404 if missing
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({
       actorId,
       action: "user.delete",

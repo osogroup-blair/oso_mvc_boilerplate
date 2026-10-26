@@ -93,3 +93,11 @@ This is exactly how the CMS renders a Page: the controller hands over the
 - Controller that feeds it: `src/controllers/page.controller.ts`
 - Recursive admin form helper: `src/views/helpers/renderField.ts`
 - Layouts: `src/views/layouts/{main,public}.hbs`
+
+
+## October 26 audit remediation contract
+
+Scripts must be external or carry nonce="{{@root.cspNonce}}". Do not add inline event-handler attributes; use explicit data actions handled by public/js/ui-actions.js, never eval or Function. Current CSP intentionally retains inline styling but forbids inline script handlers, plugins and framing. Show capability-based controls; services/routes remain the security boundary.
+
+See `docs/blueprint/EXTERNAL-AUDIT-IMPLEMENTATION-2026-10-26.md` and
+`docs/blueprint/MUTATION-EVIDENCE-MATRIX.md` for scope and verification.

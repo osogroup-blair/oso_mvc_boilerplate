@@ -30,19 +30,19 @@ export class OrgMemberModel extends BaseModel {
     });
   }
 
-  add(orgId: string, userId: string, role: OrgRoleValue = "MEMBER") {
-    return this.db.orgMember.create({ data: { orgId, userId, role } });
+  add(orgId: string, userId: string, role: OrgRoleValue = "MEMBER", actorId?: string) {
+    return this.mutate("orgMember.add", "OrgMember", actorId, tx => tx.orgMember.create({ data: { orgId, userId, role } }));
   }
 
-  changeRole(id: string, role: OrgRoleValue) {
-    return this.db.orgMember.update({ where: { id }, data: { role } });
+  changeRole(id: string, role: OrgRoleValue, actorId?: string) {
+    return this.mutate("orgMember.changeRole", "OrgMember", actorId, tx => tx.orgMember.update({ where: { id }, data: { role } }), id);
   }
 
-  remove(id: string) {
-    return this.db.orgMember.update({
+  remove(id: string, actorId?: string) {
+    return this.mutate("orgMember.remove", "OrgMember", actorId, tx => tx.orgMember.update({
       where: { id },
       data: { deletedAt: new Date() },
-    });
+    }), id);
   }
 
   countOwners(orgId: string) {

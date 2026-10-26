@@ -45,7 +45,7 @@
 {{#unless isNew}}
   {{#unless isReadonly}}
     <form method="post" action="{{deleteAction}}" class="max-w-3xl mt-4"
-      onsubmit="return confirm('Delete this {{schema.label}}?')">
+      data-confirm="Delete this {{schema.label}}?">
   <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
       {{#if adminMetadata}}
         <input type="hidden" name="_adminOrgId" value="{{adminMetadata.orgId}}" />

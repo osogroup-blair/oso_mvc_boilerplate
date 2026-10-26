@@ -1,3 +1,4 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 // Route data access. Soft-delete aware.
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
@@ -57,26 +58,25 @@ export class RouteModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.RouteCreateInput) {
-    return this.db.route.create({ data });
+  create(data: Prisma.RouteCreateInput, actorId?: string, command?: CommandMetadata, roleIds?: string[]) {
+    return this.mutate("route.create", "Route", actorId, tx => tx.route.create({ data: { ...data, ...(roleIds ? { allowedRoles: { create: roleIds.map(roleId => ({ roleId })) } } : {}) } }), undefined, command, (tx, resultId) => tx.route.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  update(id: string, data: Prisma.RouteUpdateInput) {
-    return this.db.route.update({ where: { id }, data });
+  update(id: string, data: Prisma.RouteUpdateInput, actorId?: string, command?: CommandMetadata, roleIds?: string[]) {
+    return this.mutate("route.update", "Route", actorId, tx => tx.route.update({ where: { id, deletedAt: null }, data: { ...data, ...(roleIds !== undefined ? { allowedRoles: { deleteMany: {}, create: roleIds.map(roleId => ({ roleId })) } } : {}) } }), id, command, (tx, resultId) => tx.route.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
-  softDelete(id: string) {
-    return this.db.route.update({ where: { id }, data: { deletedAt: new Date() } });
+  softDelete(id: string, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("route.softDelete", "Route", actorId, tx => tx.route.update({ where: { id }, data: { deletedAt: new Date() } }), id, command, (tx, resultId) => tx.route.findUniqueOrThrow({ where: { id: resultId } }));
   }
 
   // Atomically replace the allowed roles for a route (delete then create).
-  async setAllowedRoles(routeId: string, roleIds: string[]): Promise<void> {
-    await this.db.routeRole.deleteMany({ where: { routeId } });
-    if (roleIds.length > 0) {
-      await this.db.routeRole.createMany({
-        data: roleIds.map((roleId) => ({ routeId, roleId })),
-        skipDuplicates: true,
-      });
-    }
+  async setAllowedRoles(routeId: string, roleIds: string[], actorId?: string): Promise<void> {
+    await this.mutate("route.roles", "Route", actorId, async tx => {
+      await tx.routeRole.deleteMany({ where: { routeId } });
+      if (roleIds.length) await tx.routeRole.createMany({ data: roleIds.map(roleId => ({ routeId, roleId })), skipDuplicates: true });
+      return { id: routeId };
+    }, routeId);
   }
 }
+export const routeModel = new RouteModel();

@@ -1,10 +1,13 @@
+import { randomUUID } from "node:crypto";
+import { publicUploads } from "./middleware/public-upload.js";
+import { publicObjectHeaders } from "./lib/public-upload-policy.js";
 // Express app assembly. Order matters: security → parsing → logging →
 // routes → 404 → error handler (last).
 import express from "express";
 import { engine } from "express-handlebars";
 import Handlebars from "handlebars";
 import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
+import { dirname, join, basename } from "node:path";
 import { securityHeaders, rateLimiter } from "./middleware/security.js";
 import { requestId } from "./middleware/requestId.js";
 import { requestLogger } from "./middleware/requestLogger.js";
@@ -49,11 +52,16 @@ export function createApp() {
   app.use(express.json());
 
   // Static assets
-  app.use(express.static(join(process.cwd(), "public")));
+  app.use(publicUploads);
+  app.use(express.static(join(process.cwd(), "public"), { setHeaders(res, file) {
+    const trusted = ["css", "js", "fonts"].some(directory => file.startsWith(join(process.cwd(), "public", directory) + "/"));
+    if (!trusted) for (const [key, value] of Object.entries(publicObjectHeaders(basename(file)))) res.setHeader(key, value);
+  } }));
 
   // Routes
   app.use(optionalAuth);
   app.use(ensureCsrfToken);
+  app.use((_req, res, next) => { res.locals.operationId = randomUUID(); next(); });
   app.use(injectNavigation);
   
   // Inject global settings into public layout views, and verify maintenance mode

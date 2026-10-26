@@ -128,8 +128,8 @@ export class WorkflowExecutionModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.WorkflowExecutionUncheckedCreateInput) {
-    return this.db.workflowExecution.create({ data });
+  create(data: Prisma.WorkflowExecutionUncheckedCreateInput, actorId?: string) {
+    return this.mutate("workflowExecution.create", "WorkflowExecution", actorId, tx => tx.workflowExecution.create({ data }));
   }
 
   async reserveStart(data: Prisma.WorkflowStartIntentUncheckedCreateInput) {
@@ -159,8 +159,8 @@ export class WorkflowExecutionModel extends BaseModel {
     }
   }
 
-  update(id: string, data: Prisma.WorkflowExecutionUpdateInput) {
-    return this.db.workflowExecution.update({
+  update(id: string, data: Prisma.WorkflowExecutionUpdateInput, actorId?: string) {
+    return this.mutate("workflowExecution.update", "WorkflowExecution", actorId, tx => tx.workflowExecution.update({
       where: { id },
       data,
       include: {
@@ -168,18 +168,18 @@ export class WorkflowExecutionModel extends BaseModel {
         startedBy: { select: { id: true, name: true, email: true } },
         org: true,
       },
-    });
+    }), id);
   }
 
   updateStatus(id: string, status: WorkflowExecutionStatus, data: Prisma.WorkflowExecutionUpdateInput = {}) {
     return this.update(id, { ...data, status, lastSyncedAt: new Date() });
   }
 
-  softDelete(id: string) {
-    return this.db.workflowExecution.update({
+  softDelete(id: string, actorId?: string) {
+    return this.mutate("workflowExecution.softDelete", "WorkflowExecution", actorId, tx => tx.workflowExecution.update({
       where: { id },
       data: { deletedAt: new Date() },
-    });
+    }), id);
   }
 }
 

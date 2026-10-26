@@ -1,6 +1,12 @@
+import type { CommandMetadata } from "../lib/command-contracts.js";
 import { BaseModel } from "./BaseModel.js";
 import type { ListParams } from "../lib/query.js";
 import type { Prisma } from "@prisma/client";
+
+const safeSessionSelect = { id: true, userId: true, expiresAt: true, createdAt: true,
+  user: { select: { id: true, name: true, email: true, roleId: true, isActive: true, deletedAt: true,
+    role: { select: { id: true, name: true, deletedAt: true } } } },
+} satisfies Prisma.SessionSelect;
 
 export class SessionModel extends BaseModel {
   listActive(params: ListParams) {
@@ -22,13 +28,7 @@ export class SessionModel extends BaseModel {
       skip: params.skip,
       take: params.take,
       orderBy: params.orderBy,
-      include: {
-        user: {
-          include: {
-            role: true,
-          },
-        },
-      },
+      select: safeSessionSelect,
     });
   }
 
@@ -49,36 +49,36 @@ export class SessionModel extends BaseModel {
     return this.db.session.count({ where });
   }
 
-  create(data: { userId: string; token: string; expiresAt: Date }) {
-    return this.db.session.create({ data });
+  create(data: { userId: string; token: string; expiresAt: Date }, actorId?: string) {
+    return this.mutate("session.create", "Session", actorId ?? data.userId, tx => tx.session.create({ data, select: safeSessionSelect }));
   }
 
   findByToken(token: string) {
     return this.db.session.findUnique({
       where: { token },
-      include: { user: { include: { role: true } } },
+      select: safeSessionSelect,
     });
   }
 
   findById(id: string) {
     return this.db.session.findUnique({
       where: { id },
-      include: { user: true },
+      select: safeSessionSelect,
     });
   }
 
-  deleteById(id: string) {
-    return this.db.session.delete({
-      where: { id },
-    });
+  deleteById(id: string, actorId?: string, command?: CommandMetadata) {
+    return this.mutate("session.deleteById", "Session", actorId, tx => tx.session.delete({
+      where: { id }, select: { id: true },
+    }), id, command, async (_tx, resultId) => ({ id: resultId }));
   }
 
-  deleteByToken(token: string) {
-    return this.db.session.deleteMany({ where: { token } });
+  deleteByToken(token: string, actorId?: string) {
+    return this.mutate("session.deleteByToken", "Session", actorId, tx => tx.session.deleteMany({ where: { token } }));
   }
 
-  deleteByUserId(userId: string) {
-    return this.db.session.deleteMany({ where: { userId } });
+  deleteByUserId(userId: string, actorId?: string) {
+    return this.mutate("session.deleteByUserId", "Session", actorId, tx => tx.session.deleteMany({ where: { userId } }));
   }
 }
 

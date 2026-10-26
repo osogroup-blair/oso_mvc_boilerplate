@@ -116,19 +116,19 @@ export class WorkflowScheduleModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.WorkflowScheduleUncheckedCreateInput) {
-    return this.db.workflowSchedule.create({
+  create(data: Prisma.WorkflowScheduleUncheckedCreateInput, actorId?: string) {
+    return this.mutate("workflowSchedule.create", "WorkflowSchedule", actorId, tx => tx.workflowSchedule.create({
       data,
       include: {
         workflowDefinition: true,
         createdBy: { select: { id: true, name: true, email: true } },
         org: true,
       },
-    });
+    }));
   }
 
-  update(id: string, data: Prisma.WorkflowScheduleUpdateInput) {
-    return this.db.workflowSchedule.update({
+  update(id: string, data: Prisma.WorkflowScheduleUpdateInput, actorId?: string) {
+    return this.mutate("workflowSchedule.update", "WorkflowSchedule", actorId, tx => tx.workflowSchedule.update({
       where: { id },
       data,
       include: {
@@ -136,14 +136,14 @@ export class WorkflowScheduleModel extends BaseModel {
         createdBy: { select: { id: true, name: true, email: true } },
         org: true,
       },
-    });
+    }), id);
   }
 
-  markDeleted(id: string) {
+  markDeleted(id: string, actorId?: string) {
     return this.update(id, {
       status: WorkflowScheduleStatus.DELETED,
       deletedAt: new Date(),
-    });
+    }, actorId);
   }
 }
 

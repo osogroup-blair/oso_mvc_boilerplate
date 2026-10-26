@@ -1,22 +1,9 @@
 import { randomUUID } from "node:crypto";
-import { extname } from "node:path";
+import { validatePublicUpload } from "../lib/public-upload-policy.js";
 import { storageService } from "./storage.service.js";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { AssetModel, assetModel } from "../models/asset.model.js";
-
-const ALLOWED_MIME_TYPES = [
-  "image/jpeg",
-  "image/png",
-  "image/gif",
-  "image/webp",
-  "image/svg+xml",
-  "application/pdf",
-  "text/plain",
-  "application/zip",
-];
-
-const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 export interface UploadFileOptions {
   buffer: Buffer;
@@ -27,35 +14,30 @@ export interface UploadFileOptions {
 }
 
 export class AssetService extends BaseService {
-  constructor(private readonly model: AssetModel = assetModel) {
+  constructor(private readonly model: AssetModel = assetModel, private readonly storage = storageService) {
     super("AssetService");
   }
 
   async upload(options: UploadFileOptions) {
-    if (!ALLOWED_MIME_TYPES.includes(options.mimetype)) {
-      throw AppError.badRequest(`File type '${options.mimetype}' is not allowed`);
-    }
+    const verified = await validatePublicUpload(options.buffer, options.originalname, options.mimetype, options.size);
+    const key = `${randomUUID()}.${verified.extension}`;
+    const { url, provider } = await this.storage.upload(key, verified.buffer, verified.mimeType);
 
-    if (options.size > MAX_FILE_SIZE) {
-      throw AppError.badRequest("File exceeds the maximum size limit of 10MB");
-    }
-
-    const extension = extname(options.originalname);
-    const key = `${randomUUID()}${extension}`;
-
-    const { url, provider } = await storageService.upload(key, options.buffer, options.mimetype);
-
-    const asset = await this.model.create({
+    let asset;
+    try { asset = await this.model.create({
       filename: options.originalname,
-      mimeType: options.mimetype,
-      size: options.size,
+      mimeType: verified.mimeType,
+      size: verified.size,
       key,
       url,
       provider,
       userId: options.userId,
-    });
+    }); } catch (error) {
+      await this.storage.delete(key, provider).catch(() => this.log.error({ code: "UPLOAD_ORPHAN" }, "Upload cleanup requires reconciliation"));
+      throw error;
+    }
 
-    this.log.info({ assetId: asset.id, filename: asset.filename }, "Asset uploaded successfully");
+    this.log.info({ assetId: asset.id }, "Asset uploaded successfully");
     return asset;
   }
 
@@ -69,14 +51,12 @@ export class AssetService extends BaseService {
     return this.model.listAll();
   }
 
-  async delete(id: string) {
+  async delete(id: string, actorId?: string) {
     const asset = await this.findById(id);
 
-    await storageService.delete(asset.key, asset.provider).catch((err) => {
-      this.log.error({ err, key: asset.key }, "Failed to delete file from physical storage");
-    });
+    await this.storage.delete(asset.key, asset.provider);
 
-    await this.model.softDelete(asset.id);
+    await this.model.softDelete(asset.id, actorId);
 
     this.log.info({ assetId: asset.id }, "Asset deleted successfully");
     return { success: true };

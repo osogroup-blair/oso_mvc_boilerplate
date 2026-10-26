@@ -1,3 +1,4 @@
+import { recordId } from "../lib/identifiers.js";
 // REST JSON controller for Tasks.
 // Demonstrates: Zod validation + ok()/fail() envelope, requireAuth on writes.
 import type { Request, Response, NextFunction } from "express";
@@ -28,7 +29,7 @@ export class TaskController {
     try {
       const query     = listQuerySchema.parse(req.query);
       const params    = toListParams(query);
-      const projectId = req.params.projectId;
+      const projectId = recordId.parse(req.params.projectId);
 
       const [rows, total] = await Promise.all([
         taskService.list({ ...params, projectId }),
@@ -43,7 +44,7 @@ export class TaskController {
   async create(req: Request, res: Response, next: NextFunction) {
     try {
       const data      = taskCreateSchema.parse(req.body);
-      const projectId = req.params.projectId;
+      const projectId = recordId.parse(req.params.projectId);
       const actorId   = req.user?.id;
 
       const created = await taskService.create(
@@ -56,7 +57,8 @@ export class TaskController {
           meta:        data.meta ?? undefined,
           project:     { connect: { id: projectId } },
         },
-        actorId
+        actorId,
+        z.string().uuid().optional().parse(req.get("Idempotency-Key"))
       );
 
       res.status(201).json(ok(created));
@@ -70,12 +72,14 @@ export class TaskController {
       const actorId = req.user?.id;
 
       const updated = await taskService.update(
-        req.params.id,
+        recordId.parse(req.params.id),
         {
           ...data,
           dueDate: data.dueDate ? new Date(data.dueDate) : data.dueDate,
         },
-        actorId
+        actorId,
+        recordId.parse(req.params.projectId),
+        z.string().uuid().optional().parse(req.get("Idempotency-Key"))
       );
 
       res.json(ok(updated));
@@ -85,7 +89,7 @@ export class TaskController {
   // DELETE /api/projects/:projectId/tasks/:id
   async destroy(req: Request, res: Response, next: NextFunction) {
     try {
-      const removed = await taskService.remove(req.params.id, req.user?.id);
+      const removed = await taskService.remove(recordId.parse(req.params.id), req.user?.id, recordId.parse(req.params.projectId), z.string().uuid().optional().parse(req.get("Idempotency-Key")));
       res.json(ok(removed));
     } catch (err) { next(err); }
   }
@@ -93,7 +97,7 @@ export class TaskController {
   // POST /api/tasks/:id/tags/:tagId  — M2M: add a tag
   async addTag(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await taskService.addTag(req.params.id, req.params.tagId, req.user?.id);
+      const result = await taskService.addTag(recordId.parse(req.params.id), recordId.parse(req.params.tagId), req.user?.id, z.string().uuid().optional().parse(req.get("Idempotency-Key")));
       res.status(201).json(ok(result));
     } catch (err) { next(err); }
   }
@@ -101,7 +105,7 @@ export class TaskController {
   // DELETE /api/tasks/:id/tags/:tagId  — M2M: remove a tag
   async removeTag(req: Request, res: Response, next: NextFunction) {
     try {
-      const result = await taskService.removeTag(req.params.id, req.params.tagId, req.user?.id);
+      const result = await taskService.removeTag(recordId.parse(req.params.id), recordId.parse(req.params.tagId), req.user?.id, z.string().uuid().optional().parse(req.get("Idempotency-Key")));
       res.json(ok(result));
     } catch (err) { next(err); }
   }

@@ -22,11 +22,12 @@ const openResource = (req: Request, schema: AdminSchema, action: AdminAction, mu
 
 // Pre-fetch options for every relation field in a schema.
 // The view never queries the DB — it receives ready-made { id, label } lists.
-async function fetchRelationOptions(fields: FieldDef[]): Promise<RelationOptionsMap> {
+async function fetchRelationOptions(fields: FieldDef[], role: string): Promise<RelationOptionsMap> {
   const map: RelationOptionsMap = {};
   for (const field of fields) {
     if ((field.type === "relation" || field.type === "multiRelation") && (field.relation ?? field.multiRelation)) {
       const relConfig = field.relation ?? field.multiRelation!;
+      await permissionsService.assert(role, `${relConfig.model}:read`);
       const resource = getResource(relConfig.model);
       const records = await resource.listAll();
       map[field.key] = records.map((r: Record<string, unknown>) => ({
@@ -36,7 +37,7 @@ async function fetchRelationOptions(fields: FieldDef[]): Promise<RelationOptions
     }
     // Recurse into nested object fields.
     if (field.fields) {
-      Object.assign(map, await fetchRelationOptions(field.fields));
+      Object.assign(map, await fetchRelationOptions(field.fields, role));
     }
   }
   return map;
@@ -96,8 +97,23 @@ export class AdminController {
   private async validationForm(req:Request,res:Response,next:NextFunction,error:unknown,isNew:boolean) {
     if(!(error instanceof ZodError))return next(error);
     try {
-      const schema=getSchema(req.params.model);
-      if(!schema.adapter)return next(error);
+      let schema=getSchema(req.params.model);
+      if(!schema.adapter) {
+        await permissionsService.assert(req.user!.role, `${schema.key}:${isNew ? "create" : "update"}`);
+        if (schema.key === "user" && isNew) schema = { ...schema, fields: schema.fields.map(field => field.key === "password" ? { ...field, required: true } : field) };
+        const resource = getResource(schema.key);
+        const existing = isNew ? {} : await resource.getById(req.params.id);
+        if (!existing) throw AppError.notFound(schema.label);
+        const fields = schema.fields.filter(field => field.type !== "password" && !/password|secret|token|credential/i.test(field.key));
+        const record = { ...existing, ...castFields(cleanDeep(req.body), fields) };
+        const relationOptions = await fetchRelationOptions(schema.fields, req.user!.role);
+        const form = adminResourceService.form(schema, undefined, record, isNew);
+        const operation = typeof req.body._adminOperationId === "string" && /^[a-f0-9-]{36}$/i.test(req.body._adminOperationId) ? req.body._adminOperationId : undefined;
+        if (operation && form.adminMetadata) form.adminMetadata.operationId = operation;
+        return res.status(400).render("admin/form", { layout: "main", title: `${isNew ? "New" : "Edit"} ${schema.label}`, schema, record, relationOptions,
+          isNew, action: `/admin/${schema.key}${isNew ? "" : "/" + req.params.id}`, deleteAction: `/admin/${schema.key}/${req.params.id}/delete`, ...form,
+          validationErrors: error.errors.map(issue => ({ field: issue.path.join("."), message: issue.message })) });
+      }
       const {context}=await openResource(req,schema,isNew?"create":"update",true);
       if(!context)return next(error);
       const resource=schema.adapter.bind(context);
@@ -113,7 +129,7 @@ export class AdminController {
     }catch(failure){return next(failure);}
   }
   // GET /admin  — index of all registered models with application metrics
-  async index(_req: Request, res: Response, next: NextFunction) {
+  async index(req: Request, res: Response, next: NextFunction) {
     try {
       const [
         pagesCount,
@@ -122,14 +138,14 @@ export class AdminController {
         rolesCount,
         allRoles
       ] = await Promise.all([
-        getResource("page").count(),
-        getResource("user").count(),
-        sessionService.countActive(),
-        getResource("role").count(),
-        roleService.listWithUserCounts()
+        (await permissionsService.canByName(req.user!.role, "page", "read") ? getResource("page").count() : 0),
+        (await permissionsService.canByName(req.user!.role, "user", "read") ? getResource("user").count() : 0),
+        (await permissionsService.canByName(req.user!.role, "session", "read") ? sessionService.countActive() : 0),
+        (await permissionsService.canByName(req.user!.role, "role", "read") ? getResource("role").count() : 0),
+        (await permissionsService.canByName(req.user!.role, "role", "read") ? roleService.listWithUserCounts() : [])
       ]);
 
-      const dataObjectsCount = allSchemas().length;
+      const dataObjectsCount = (await Promise.all(allSchemas().map(async s => await permissionsService.canByName(req.user!.role, s.key, "read") ? 1 : 0))).reduce<number>((a, b) => a + b, 0);
 
       res.render("admin/index", {
         layout: "main",
@@ -152,9 +168,9 @@ export class AdminController {
   }
 
   // GET /admin/models — list of all registered models with record counts
-  async modelsList(_req: Request, res: Response, next: NextFunction) {
+  async modelsList(req: Request, res: Response, next: NextFunction) {
     try {
-      const schemas = allSchemas();
+      const schemas = (await Promise.all(allSchemas().map(async s => await permissionsService.canByName(req.user!.role, s.key, "read") ? s : null))).filter((s): s is AdminSchema => s !== null);
       const schemasWithCounts = await Promise.all(
         schemas.map(async (s) => {
           try {
@@ -218,11 +234,12 @@ export class AdminController {
   // GET /admin/:model/new  — create form
   async createForm(req: Request, res: Response, next: NextFunction) {
     try {
-      const schema = getSchema(req.params.model);
+      let schema = getSchema(req.params.model);
+      if (schema.key === "user") schema = { ...schema, fields: schema.fields.map(field => field.key === "password" ? { ...field, required: true } : field) };
       if (req.user) await permissionsService.assert(req.user.role, `${schema.key}:create`);
       const { context } = await openResource(req, schema, "create");
       const record = context ? await schema.adapter?.defaults?.(context) ?? {} : {};
-      const relationOptions = context ? await schema.adapter!.options(schema.fields, context, record) : await fetchRelationOptions(schema.fields);
+      const relationOptions = context ? await schema.adapter!.options(schema.fields, context, record) : await fetchRelationOptions(schema.fields, req.user!.role);
       res.render("admin/form", {
         layout: "main",
         title: `New ${schema.label}`,
@@ -248,7 +265,7 @@ export class AdminController {
       const record = await resource.getById(req.params.id);
       if (!record) throw AppError.notFound(schema.label);
       if (schema.fieldsForRecord) schema = { ...schema, fields: schema.fieldsForRecord(record) };
-      const relationOptions = context ? await schema.adapter!.options(schema.fields, context, record) : await fetchRelationOptions(schema.fields);
+      const relationOptions = context ? await schema.adapter!.options(schema.fields, context, record) : await fetchRelationOptions(schema.fields, req.user!.role);
       res.render("admin/form", {
         layout: "main",
         title: `Edit ${schema.label}`,
@@ -274,7 +291,7 @@ export class AdminController {
       if (req.user) await permissionsService.assert(req.user.role, `${schema.key}:create`);
       const { resource, context, mutation } = await openResource(req, schema, "create", true);
       const data = context ? await adminResourceService.parse(schema, req.body, context, mutation!) : castFields(cleanDeep(req.body), schema.fields);
-      const created = await resource.create(data, req.user?.id);
+      const created = await resource.create(data, req.user?.id, mutation?.operationId);
       res.redirect(`/admin/${schema.key}/${(created as { id: string }).id}${scopeQuery(context)}`);
     } catch (err) {
       await this.validationForm(req,res,next,err,true);
@@ -292,7 +309,7 @@ export class AdminController {
       if (schema.isRecordReadonly?.(before)) throw AppError.forbidden("This record is managed by the application");
       const fields = schema.fieldsForRecord?.(before) ?? schema.fields;
       const data = context ? await adminResourceService.parse(schema, req.body, context, mutation!) : castFields(cleanDeep(req.body), fields);
-      await resource.update(req.params.id, data, req.user?.id);
+      await resource.update(req.params.id, data, req.user?.id, mutation?.operationId);
       res.redirect(`/admin/${schema.key}/${req.params.id}${scopeQuery(context)}`);
     } catch (err) {
       await this.validationForm(req,res,next,err,false);
@@ -304,11 +321,11 @@ export class AdminController {
     try {
       const schema = getSchema(req.params.model);
       if (req.user) await permissionsService.assert(req.user.role, `${schema.key}:delete`);
-      const { resource, context } = await openResource(req, schema, "delete", true);
+      const { resource, context, mutation } = await openResource(req, schema, "delete", true);
       const before = await resource.getById(req.params.id);
       if (!before) throw AppError.notFound(schema.label);
       if (schema.isRecordReadonly?.(before)) throw AppError.forbidden("This record is managed by the application");
-      await resource.remove(req.params.id, req.user?.id);
+      await resource.remove(req.params.id, req.user?.id, mutation?.operationId);
       res.redirect(`/admin/${schema.key}${scopeQuery(context)}`);
     } catch (err) {
       next(err);

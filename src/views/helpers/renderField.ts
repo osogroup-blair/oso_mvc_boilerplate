@@ -81,7 +81,7 @@ function relationInput(name: string, value: unknown, options: RelationOption[]):
       data-relation-target="${esc(name)}"
       class="w-full rounded border border-gray-300 px-3 py-2 text-sm"
       placeholder="Search…"
-      oninput="(function(el){var o=el.list.querySelector('option[data-label=&quot;'+CSS.escape(el.value)+'&quot;]');document.getElementsByName(el.dataset.relationTarget)[0].value=o?o.dataset.id:'';})(this)" />
+      data-relation-input />
     <input type="hidden" name="${esc(name)}" value="${esc(value)}" />
     <datalist id="${listId}">${options.map((o) => `<option data-id="${esc(o.id)}" data-label="${esc(o.label)}" value="${esc(o.label)}"></option>`).join("")}</datalist>
     <noscript><select name="${esc(name)}" class="w-full rounded border px-3 py-2 text-sm">${opts}</select></noscript>`;
@@ -151,7 +151,7 @@ function renderOne(field: FieldDef, value: unknown, ctx: RenderCtx): string {
         const cells = cols
           .map((c) => `<td class="px-2 py-1">${scalarInput(c, `${name}[${i}][${c.key}]`, row?.[c.key])}</td>`)
           .join("");
-        return `<tr data-row>${cells}<td class="px-2 py-1"><button type="button" class="text-red-500 text-xs" onclick="this.closest('tr').remove()">Remove</button></td></tr>`;
+        return `<tr data-row>${cells}<td class="px-2 py-1"><button type="button" class="text-red-500 text-xs" data-remove-row>Remove</button></td></tr>`;
       })
       .join("");
     // A template row (index __i__) is cloned by the Add button.
@@ -165,7 +165,7 @@ function renderOne(field: FieldDef, value: unknown, ctx: RenderCtx): string {
         <table class="w-full border border-gray-200 rounded" data-array-table>
           <thead><tr>${head}<th></th></tr></thead>
           <tbody>${body}</tbody>
-          <template>${`<tr data-row>${templateCells}<td class="px-2 py-1"><button type="button" class="text-red-500 text-xs" onclick="this.closest('tr').remove()">Remove</button></td></tr>`}</template>
+          <template>${`<tr data-row>${templateCells}<td class="px-2 py-1"><button type="button" class="text-red-500 text-xs" data-remove-row>Remove</button></td></tr>`}</template>
         </table>
         ${field.help ? `<p class="text-xs text-gray-500 mt-1">${esc(field.help)}</p>` : ""}
       </div>`;
@@ -180,7 +180,7 @@ function renderOne(field: FieldDef, value: unknown, ctx: RenderCtx): string {
         (v, i) => `
       <div class="flex gap-2 mb-1" data-item>
         <input type="${inputType}" name="${esc(name)}[${i}]" value="${esc(v)}" class="flex-1 rounded border border-gray-300 px-3 py-2 text-sm" />
-        <button type="button" class="text-red-500 text-xs" onclick="this.closest('[data-item]').remove()">×</button>
+        <button type="button" class="text-red-500 text-xs" data-remove-item>×</button>
       </div>`
       )
       .join("");

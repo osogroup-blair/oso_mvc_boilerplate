@@ -1,3 +1,4 @@
+import { commandMetadata } from "../lib/command-contracts.js";
 import { BaseService } from "./BaseService.js";
 import { AppError } from "../lib/AppError.js";
 import { NavigationItemModel } from "../models/navigationItem.model.js";
@@ -26,22 +27,22 @@ export class NavigationItemService extends BaseService {
     return found;
   }
 
-  async create(data: Prisma.NavigationItemUncheckedCreateInput, actorId?: string) {
-    const created = await this.model.create(data);
+  async create(data: Prisma.NavigationItemUncheckedCreateInput, actorId?: string, operationId?: string) {
+    const created = await this.model.create(data, actorId, commandMetadata(data, operationId));
     await this.audit.record({ actorId, action: "navigationItem.create", entityType: "NavigationItem", entityId: created.id, changes: { after: created } });
     return created;
   }
 
-  async update(id: string, data: Prisma.NavigationItemUncheckedUpdateInput, actorId?: string) {
+  async update(id: string, data: Prisma.NavigationItemUncheckedUpdateInput, actorId?: string, operationId?: string) {
     const before = await this.getById(id);
-    const updated = await this.model.update(id, data);
+    const updated = await this.model.update(id, data, actorId, commandMetadata(data, operationId));
     await this.audit.record({ actorId, action: "navigationItem.update", entityType: "NavigationItem", entityId: id, changes: { before, after: updated } });
     return updated;
   }
 
-  async remove(id: string, actorId?: string) {
+  async remove(id: string, actorId?: string, operationId?: string) {
     await this.getById(id);
-    const removed = await this.model.softDelete(id);
+    const removed = await this.model.softDelete(id, actorId, commandMetadata({ id }, operationId));
     await this.audit.record({ actorId, action: "navigationItem.delete", entityType: "NavigationItem", entityId: id });
     return removed;
   }

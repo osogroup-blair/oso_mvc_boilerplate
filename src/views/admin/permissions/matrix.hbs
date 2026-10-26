@@ -30,6 +30,7 @@
 
 <form method="POST" action="/admin/permissions" id="permissions-form">
   <input type="hidden" name="_csrf" value="{{@root.csrfToken}}" />
+  <input type="hidden" name="_operationId" value="{{@root.operationId}}" />
   <div class="bg-white rounded-xl border border-gray-200 overflow-x-auto shadow-sm">
     <table class="w-full text-sm border-collapse">
       <thead>
@@ -103,9 +104,9 @@
       Save Permissions
     </button>
     <div class="flex items-center gap-3 text-xs text-gray-400">
-      <button type="button" onclick="setAllChecked(true)" class="text-indigo-600 hover:underline">Check all</button>
+      <button type="button" data-check-all="true" class="text-indigo-600 hover:underline">Check all</button>
       <span>·</span>
-      <button type="button" onclick="setAllChecked(false)" class="text-red-500 hover:underline">Uncheck all</button>
+      <button type="button" data-check-all="false" class="text-red-500 hover:underline">Uncheck all</button>
     </div>
     <span class="text-xs text-gray-400 ml-auto">
       ⚠ Changes affect all users assigned the modified roles
@@ -113,7 +114,7 @@
   </div>
 </form>
 
-<script>
+<script nonce="{{@root.cspNonce}}">
 function setAllChecked(checked) {
   document.querySelectorAll('#permissions-form input[type="checkbox"]').forEach(function(cb) {
     cb.checked = checked;

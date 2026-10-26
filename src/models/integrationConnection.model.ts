@@ -100,12 +100,12 @@ export class IntegrationConnectionModel extends BaseModel {
     });
   }
 
-  create(data: Prisma.IntegrationConnectionUncheckedCreateInput) {
-    return this.db.integrationConnection.create({ data });
+  create(data: Prisma.IntegrationConnectionUncheckedCreateInput, actorId?: string) {
+    return this.mutate("integrationConnection.create", "IntegrationConnection", actorId, tx => tx.integrationConnection.create({ data }));
   }
 
-  update(id: string, data: Prisma.IntegrationConnectionUpdateInput) {
-    return this.db.integrationConnection.update({ where: { id }, data });
+  update(id: string, data: Prisma.IntegrationConnectionUpdateInput, actorId?: string) {
+    return this.mutate("integrationConnection.update", "IntegrationConnection", actorId, tx => tx.integrationConnection.update({ where: { id }, data }), id);
   }
 
   /**
@@ -120,9 +120,9 @@ export class IntegrationConnectionModel extends BaseModel {
       status?: IntegrationConnectionStatus;
       lastTestStatus: IntegrationTestStatus;
       lastTestMessage: string;
-    }
+    }, actorId?: string
   ) {
-    const result = await this.db.integrationConnection.updateMany({
+    const result = await this.mutate("integrationConnection.updateTestResult", "IntegrationConnection", actorId, tx => tx.integrationConnection.updateMany({
       where: { id, credentialFingerprint: expectedFingerprint, ...this.notDeleted },
       data: {
         status: data.status,
@@ -130,15 +130,15 @@ export class IntegrationConnectionModel extends BaseModel {
         lastTestStatus: data.lastTestStatus,
         lastTestMessage: data.lastTestMessage,
       },
-    });
+    }), id);
     return result.count;
   }
 
-  softDelete(id: string) {
-    return this.db.integrationConnection.update({
+  softDelete(id: string, actorId?: string) {
+    return this.mutate("integrationConnection.softDelete", "IntegrationConnection", actorId, tx => tx.integrationConnection.update({
       where: { id },
       data: { deletedAt: new Date(), status: IntegrationConnectionStatus.DISABLED, disabledAt: new Date() },
-    });
+    }), id);
   }
 }
 

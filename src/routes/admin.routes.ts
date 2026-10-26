@@ -2,7 +2,7 @@
 // the :model param selects the schema + resource at runtime.
 import { Router } from "express";
 import { adminController } from "../controllers/admin.controller.js";
-import { requireAuth, requirePermission } from "../middleware/auth.js";
+import { requireAuth, requirePermission, injectAdminPermissions } from "../middleware/auth.js";
 import { adminAuthController } from "../controllers/adminAuth.controller.js";
 import { logController } from "../controllers/log.controller.js";
 import { settingAdminRoutes } from "./admin/setting.admin.routes.js";
@@ -29,10 +29,10 @@ adminRoutes.post("/login", verifyBrowserMutation, adminAuthController.login.bind
 adminRoutes.post("/logout", requireAuth, verifyBrowserMutation, adminAuthController.logout.bind(adminAuthController));
 
 // Guard all subsequent admin CRUD routes
-adminRoutes.use(requireAuth);
+adminRoutes.use(requireAuth, requirePermission("admin", "access"));
 
 // Multipart must be parsed before reading the body token. No bytes persist here.
-adminRoutes.post("/assets/upload", upload.single("file"), verifyBrowserMutation, assetController.upload.bind(assetController));
+adminRoutes.post("/assets/upload", requirePermission("asset", "create"), upload.single("file"), verifyBrowserMutation, assetController.upload.bind(assetController));
 adminRoutes.use(verifyBrowserMutation);
 
 // Inject currentPath + adminUser into every admin render — consumed by the sidebar partial.
@@ -41,33 +41,33 @@ adminRoutes.use((req, res, next) => {
   // get the full path that matches the sidebar href values (e.g. "/admin/user").
   res.locals.currentPath = req.baseUrl + req.path;
   res.locals.adminUser   = res.locals.user;
-  next();
+  injectAdminPermissions(req, res, next);
 });
 
 adminRoutes.get("/", adminController.index.bind(adminController));
 adminRoutes.get("/models", adminController.modelsList.bind(adminController));
 
 // Logging and Diagnostics (must be before /:model catch-all)
-adminRoutes.get("/logs/audit", logController.auditList.bind(logController));
-adminRoutes.get("/logs/audit/:id", logController.auditDetail.bind(logController));
-adminRoutes.get("/logs/diagnostics", logController.diagnostics.bind(logController));
-adminRoutes.get("/logs/stream", logController.liveStream.bind(logController));
+adminRoutes.get("/logs/audit", requirePermission("admin", "logs"), logController.auditList.bind(logController));
+adminRoutes.get("/logs/audit/:id", requirePermission("admin", "logs"), logController.auditDetail.bind(logController));
+adminRoutes.get("/logs/diagnostics", requirePermission("admin", "logs"), logController.diagnostics.bind(logController));
+adminRoutes.get("/logs/stream", requirePermission("admin", "logs"), logController.liveStream.bind(logController));
 
 // Placeholder sections — wired in the nav, built out later.
-adminRoutes.get("/permissions", permissionAdminController.matrix.bind(permissionAdminController));
+adminRoutes.get("/permissions", requirePermission("role", "read"), permissionAdminController.matrix.bind(permissionAdminController));
 adminRoutes.post("/permissions", requirePermission("role", "update"), permissionAdminController.saveMatrix.bind(permissionAdminController));
 adminRoutes.use("/settings", settingAdminRoutes);
 
 // Active Sessions
-adminRoutes.get("/sessions", sessionAdminController.list.bind(sessionAdminController));
-adminRoutes.post("/sessions/:id/logout", requirePermission("user", "update"), sessionAdminController.logout.bind(sessionAdminController));
+adminRoutes.get("/sessions", requirePermission("session", "read"), sessionAdminController.list.bind(sessionAdminController));
+adminRoutes.post("/sessions/:id/logout", requirePermission("session", "revoke"), sessionAdminController.logout.bind(sessionAdminController));
 
 // Asset / Media Library
-adminRoutes.get("/assets", assetController.list.bind(assetController));
-adminRoutes.post("/assets/delete/:id", assetController.delete.bind(assetController));
+adminRoutes.get("/assets", requirePermission("asset", "read"), assetController.list.bind(assetController));
+adminRoutes.post("/assets/delete/:id", requirePermission("asset", "delete"), assetController.delete.bind(assetController));
 
 // Background Job Queue Dashboard (Bull Board) — only active when Redis is available
-adminRoutes.use("/jobs", exposeQueueCsrf, createQueueBoard());
+adminRoutes.use("/jobs", requirePermission("queue", "admin"), exposeQueueCsrf, createQueueBoard());
 
 // Organizations (Multi-Tenancy)
 adminRoutes.use("/organizations", orgAdminRoutes);
